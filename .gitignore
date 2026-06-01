@@ -1,0 +1,20 @@
+.gradle/
+build/
+**/build/
+/local.properties
+/.idea/
+*.iml
+.DS_Store
+*.apk
+*.aab
+*.keystore
+*.jks
+*.log
+*.hprof
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Backups generated during manual testing. Keep examples in test-fixtures/ only.
+*.backup.json
+*.metadata.bin

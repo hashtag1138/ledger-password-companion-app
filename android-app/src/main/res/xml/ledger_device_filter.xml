@@ -1,0 +1,4 @@
+<resources>
+    <!-- Ledger USB vendor id: 0x2C97 = 11415 -->
+    <usb-device vendor-id="11415" />
+</resources>

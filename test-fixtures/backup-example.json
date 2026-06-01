@@ -1,0 +1,21 @@
+{
+    "format": "ledger-passwords-companion.v1",
+    "storage_size": 4096,
+    "app": {
+        "name": "Passwords",
+        "version": "unknown"
+    },
+    "parsed": [
+        {
+            "nickname": "github",
+            "charsets": ["UPPERCASE", "LOWERCASE", "NUMBERS"]
+        },
+        {
+            "nickname": "gmail",
+            "charsets": ["ALL_SETS"]
+        }
+    ],
+    "nicknames_erased_but_still_stored": [],
+    "corruptions_encountered": [],
+    "raw_metadatas": null
+}

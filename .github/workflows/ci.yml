@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  jvm-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Validate Gradle wrapper
+        if: hashFiles('gradlew') != ''
+        uses: gradle/actions/wrapper-validation@v4
+      - name: Run JVM tests
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew :core:test :ledger-protocol:test
+          else
+            echo "Gradle wrapper not committed yet. Run: gradle wrapper --gradle-version=9.4.1"
+          fi
