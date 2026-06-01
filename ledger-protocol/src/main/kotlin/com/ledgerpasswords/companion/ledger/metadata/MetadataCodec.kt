@@ -59,7 +59,7 @@ class MetadataCodec(
 
     fun encode(vault: Vault): ByteArray {
         VaultValidator(storageSize).validate(vault).throwIfInvalid()
-        val raw = ByteArray(storageSize) { 0x00 }
+        val raw = ByteArray(storageSize) { 0x00.toByte() }
         var offset = 0
 
         for (entry in vault.entries) {
@@ -81,8 +81,8 @@ class MetadataCodec(
         }
 
         // End marker is already zero-filled. Write two bytes explicitly for readability.
-        if (offset < raw.size) raw[offset] = 0x00
-        if (offset + 1 < raw.size) raw[offset + 1] = 0x00
+        if (offset < raw.size) raw[offset] = 0x00.toByte()
+        if (offset + 1 < raw.size) raw[offset + 1] = 0x00.toByte()
         return raw
     }
 

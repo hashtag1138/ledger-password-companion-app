@@ -1,15 +1,15 @@
 [versions]
-agp = "9.2.0"
-kotlin = "2.3.21"
-composeBom = "2026.05.01"
-activityCompose = "1.12.4"
-coroutines = "1.10.2"
-serializationJson = "1.9.0"
-junitJupiter = "5.13.0"
+agp = "8.7.3"
+kotlin = "2.0.21"
+composeBom = "2024.12.01"
+activityCompose = "1.9.3"
+coroutines = "1.9.0"
+serializationJson = "1.7.3"
+junitJupiter = "5.11.4"
 
-androidCompileSdk = "36"
+androidCompileSdk = "35"
 androidMinSdk = "26"
-androidTargetSdk = "36"
+androidTargetSdk = "35"
 java = "17"
 
 [libraries]
@@ -30,3 +30,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

@@ -1,6 +1,6 @@
 # TODO prioritaire
 
-1. Ajouter le Gradle wrapper : `gradle wrapper --gradle-version=9.4.1`.
+1. Ajouter le Gradle wrapper : `gradle wrapper`.
 2. Lancer `./gradlew :core:test :ledger-protocol:test` et corriger les éventuelles incompatibilités de dépendances.
 3. Compléter les tests du codec metadata.
 4. Finaliser la CLI offline.

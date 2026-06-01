@@ -59,9 +59,10 @@ class LedgerPasswordsClient(
         )
     }
 
-    suspend fun dumpMetadatas(storageSize: Int = getAppConfig().storageSize): ByteArray {
-        val output = ByteArrayOutputStream(storageSize)
-        while (output.size() < storageSize) {
+    suspend fun dumpMetadatas(storageSize: Int? = null): ByteArray {
+        val expectedSize = storageSize ?: getAppConfig().storageSize
+        val output = ByteArrayOutputStream(expectedSize)
+        while (output.size() < expectedSize) {
             val response = transport.exchange(
                 cla = ApduConstants.CLA_PASSWORDS,
                 ins = ApduConstants.INS_DUMP_METADATAS,
@@ -69,11 +70,11 @@ class LedgerPasswordsClient(
             require(response.data.isNotEmpty()) { "Empty dump response" }
             val flag = response.data[0].toInt() and 0xFF
             output.write(response.data, 1, response.data.size - 1)
-            if (flag == ApduConstants.LAST_CHUNK && output.size() < storageSize) {
-                error("$storageSize bytes requested but only ${output.size()} bytes available")
+            if (flag == ApduConstants.LAST_CHUNK && output.size() < expectedSize) {
+                error("$expectedSize bytes requested but only ${output.size()} bytes available")
             }
         }
-        return output.toByteArray().copyOf(storageSize)
+        return output.toByteArray().copyOf(expectedSize)
     }
 
     suspend fun loadMetadatas(raw: ByteArray) {

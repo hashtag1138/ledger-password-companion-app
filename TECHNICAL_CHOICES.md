@@ -13,15 +13,12 @@ Alternative future : migrer `core` et `ledger-protocol` en Kotlin Multiplatform 
 - Gradle Kotlin DSL.
 - Version catalog `gradle/libs.versions.toml`.
 - JDK 17.
-- Android Gradle Plugin 9.2.0.
-- Kotlin 2.3.21.
-- Compose BOM 2026.05.01.
-- Activity Compose 1.12.4.
+- Versions de Kotlin, Android Gradle Plugin, Compose et coroutines centralisées dans `gradle/libs.versions.toml`.
 
-La version Gradle recommandée dans ce squelette est `9.4.1`, car AGP 9.2.0 la documente comme version minimale et par défaut. Le wrapper n'est pas inclus pour éviter d'ajouter un JAR généré ; lancer :
+Le wrapper Gradle n'est pas inclus pour éviter d'ajouter un JAR généré dans le squelette. Après extraction, générer le wrapper avec une version compatible avec l'Android Gradle Plugin déclaré :
 
 ```bash
-gradle wrapper --gradle-version=9.4.1
+gradle wrapper
 ```
 
 ## Modules

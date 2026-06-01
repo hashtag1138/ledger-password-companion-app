@@ -10,6 +10,7 @@ import com.ledgerpasswords.companion.ledger.metadata.Hex
 import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
 class BackupJsonCodec(
@@ -21,7 +22,7 @@ class BackupJsonCodec(
     },
 ) {
     fun fromJson(text: String): Vault {
-        val file = json.decodeFromString<BackupFile>(text)
+        val file = json.decodeFromString(BackupFile.serializer(), text)
         val entries = file.parsed.map { it.toDomain() }
         return Vault(entries = entries, source = VaultSource.BackupFile)
     }
@@ -46,7 +47,7 @@ class BackupJsonCodec(
     }
 
     fun rawFromJson(text: String): ByteArray {
-        val file = json.decodeFromString<BackupFile>(text)
+        val file = json.decodeFromString(BackupFile.serializer(), text)
         return if (!file.rawMetadatas.isNullOrBlank()) {
             Hex.decode(file.rawMetadatas)
         } else {

@@ -45,15 +45,15 @@ Les transports réels USB/HID et Android USB sont volontairement laissés sous f
 Pré-requis recommandés :
 
 - JDK 17 ;
-- Gradle 9.4.1 ou compatible avec Android Gradle Plugin 9.2 ;
+- Gradle installé localement ou wrapper généré ;
 - Android Studio récent ;
-- Android SDK 36 installé ;
+- Android SDK correspondant au `compileSdk` déclaré dans `gradle/libs.versions.toml` ;
 - un Ledger avec l'app **Passwords** ouverte pour les tests device.
 
 Créer le wrapper Gradle si besoin :
 
 ```bash
-gradle wrapper --gradle-version=9.4.1
+gradle wrapper
 ```
 
 Compiler les modules JVM :

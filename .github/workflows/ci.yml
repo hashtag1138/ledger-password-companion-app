@@ -22,5 +22,5 @@ jobs:
           if [ -x ./gradlew ]; then
             ./gradlew :core:test :ledger-protocol:test
           else
-            echo "Gradle wrapper not committed yet. Run: gradle wrapper --gradle-version=9.4.1"
+            echo "Gradle wrapper not committed yet. Run: gradle wrapper"
           fi
