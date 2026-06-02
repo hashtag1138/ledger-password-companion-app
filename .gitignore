@@ -17,6 +17,12 @@ captures/
 .externalNativeBuild/
 .cxx/
 __pycache__/
+.coverage
+coverage.xml
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
 
 # Backups generated during manual testing. Keep examples in test-fixtures/ only.
 *.backup.json
