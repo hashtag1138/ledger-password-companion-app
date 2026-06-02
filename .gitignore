@@ -12,9 +12,11 @@ build/
 *.jks
 *.log
 *.hprof
+*.pyc
 captures/
 .externalNativeBuild/
 .cxx/
+__pycache__/
 
 # Backups generated during manual testing. Keep examples in test-fixtures/ only.
 *.backup.json
