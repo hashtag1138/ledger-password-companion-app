@@ -39,8 +39,13 @@ Le repository n'est plus seulement un squelette. Il contient maintenant :
 - un transport PC USB HID ;
 - une CLI offline et device (`info`, `pull`, `diff`, `push`, `verify`) ;
 - des scripts de lancement et de smoke test Speculos ;
-- une app Android Compose avec stockage local persistant, édition locale, import/export `backup.json` et flow USB réel de synchronisation ;
+- une app Android Compose avec stockage local persistant, édition locale, import/export `backup.json`, flow USB réel de synchronisation et icône launcher personnalisée ;
 - les docs de plan d'implémentation et choix techniques.
+
+Note Android :
+
+- l'icône launcher par défaut a été remplacée par une ressource personnalisée dérivée de [android-app/src/main/assets/app_icon_source.jpg](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/assets/app_icon_source.jpg:1) ;
+- les fichiers principaux ajoutés ou mis à jour sont `AndroidManifest.xml`, `mipmap-*/ic_launcher*.png`, `mipmap-anydpi-v26/ic_launcher*.xml` et `drawable/ic_launcher_background.xml`.
 
 Ce qui manque encore surtout côté produit :
 

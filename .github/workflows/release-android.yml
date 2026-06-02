@@ -1,0 +1,61 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-android-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release and debug APKs
+        run: ./gradlew --no-daemon --stacktrace :android-app:assembleRelease :android-app:assembleDebug
+
+      - name: Prepare release assets
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          mkdir -p release-assets
+          cp android-app/build/outputs/apk/release/android-app-release-unsigned.apk "release-assets/ledger-passwords-companion-${TAG_NAME}-release-unsigned.apk"
+          cp android-app/build/outputs/apk/debug/android-app-debug.apk "release-assets/ledger-passwords-companion-${TAG_NAME}-debug.apk"
+          sha256sum release-assets/* > "release-assets/ledger-passwords-companion-${TAG_NAME}-sha256.txt"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/ledger-passwords-companion-*-release-unsigned.apk
+            release-assets/ledger-passwords-companion-*-debug.apk
+            release-assets/ledger-passwords-companion-*-sha256.txt
+          body: |
+            APKs générés automatiquement depuis GitHub Actions.
+
+            Notes:
+            - `*-debug.apk` est directement installable pour test.
+            - `*-release-unsigned.apk` est le build release non signé.
