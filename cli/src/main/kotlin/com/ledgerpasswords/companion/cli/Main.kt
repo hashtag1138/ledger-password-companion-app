@@ -1,16 +1,28 @@
 package com.ledgerpasswords.companion.cli
 
+import com.ledgerpasswords.companion.core.diff.VaultDiffer
 import com.ledgerpasswords.companion.core.edit.VaultEditor
+import com.ledgerpasswords.companion.core.LedgerAppCompatibility
 import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
+import com.ledgerpasswords.companion.core.risk.LedgerPushRiskPolicy
+import com.ledgerpasswords.companion.core.risk.PushRiskDecision
+import com.ledgerpasswords.companion.core.risk.PushRiskSeverity
+import com.ledgerpasswords.companion.core.risk.PushSafetyMode
 import com.ledgerpasswords.companion.core.validation.VaultValidator
 import com.ledgerpasswords.companion.ledger.backup.BackupJsonCodec
+import com.ledgerpasswords.companion.ledger.client.LedgerPasswordsClient
 import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
+import com.ledgerpasswords.companion.ledger.transport.LedgerTransport
+import com.ledgerpasswords.companion.ledger.transport.PcHidLedgerTransport
+import com.ledgerpasswords.companion.ledger.transport.SpeculosTransport
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
+import kotlinx.coroutines.runBlocking
 
 fun main(args: Array<String>) {
     try {
@@ -26,6 +38,17 @@ class LedgerPwCli {
     private val metadataCodec = MetadataCodec()
     private val editor = VaultEditor()
     private val validator = VaultValidator()
+    private val differ = VaultDiffer()
+    internal var transportFactory: (List<String>) -> LedgerTransport = { deviceArgs ->
+        if (deviceArgs.hasFlag("--hid")) {
+            PcHidLedgerTransport()
+        } else {
+            SpeculosTransport(
+                server = deviceArgs.option("--server") ?: SpeculosTransport.DEFAULT_SERVER,
+                port = (deviceArgs.option("--port") ?: SpeculosTransport.DEFAULT_PORT.toString()).toInt(),
+            )
+        }
+    }
 
     fun run(args: List<String>) {
         if (args.isEmpty() || args.first() == "help" || args.first() == "--help") {
@@ -68,10 +91,16 @@ class LedgerPwCli {
 
     private fun validate(args: List<String>) {
         val file = args.getPath(0, "backup.json")
-        val vault = backupCodec.fromJson(file.readText())
+        val inspection = backupCodec.inspect(file.readText())
+        val vault = inspection.preferredVault
         val result = validator.validate(vault)
         if (result.isValid) {
             println("OK: ${vault.entries.size} identifiers")
+            result.warnings.forEach { println("warning: ${it.message}") }
+            inspection.findings.forEach { finding ->
+                val prefix = if (finding.severity == PushRiskSeverity.Block) "warning" else "warning"
+                println("$prefix: ${finding.message}")
+            }
         } else {
             result.issues.forEach { println("${it.code}: ${it.message}") }
             error("Backup is invalid")
@@ -132,7 +161,118 @@ class LedgerPwCli {
 
     private fun runDevice(args: List<String>) {
         require(args.isNotEmpty()) { "Missing device subcommand" }
-        error("Device commands are TODO. Implement PcHidLedgerTransport or SpeculosTransport first. Requested: ${args.joinToString(" ")}")
+        when (args.first()) {
+            "info" -> deviceInfo(args.drop(1))
+            "pull" -> devicePull(args.drop(1))
+            "diff" -> deviceDiff(args.drop(1))
+            "push" -> devicePush(args.drop(1))
+            "verify" -> deviceVerify(args.drop(1))
+            else -> error("Unknown device subcommand: ${args.first()}")
+        }
+    }
+
+    private fun deviceInfo(args: List<String>) = withClient(args) { client ->
+        val info = client.getAppInfo()
+        val config = client.getAppConfig()
+        println("App: ${info.name} ${info.version}")
+        println("Storage size: ${config.storageSize}")
+        println("Keyboard type: ${config.keyboardType}")
+        println("Press enter after typing: ${config.pressEnterAfterTyping}")
+    }
+
+    private fun devicePull(args: List<String>) = withClient(args) { client ->
+        val out = Path.of(args.requiredOption("--out"))
+        val info = client.getAppInfo()
+        val raw = client.dumpMetadatas()
+        val decoded = metadataCodec.decode(raw)
+        out.writeText(backupCodec.toJson(decoded, app = com.ledgerpasswords.companion.ledger.backup.BackupApp(info.name, info.version)))
+        println("Pulled ${decoded.vault.entries.size} identifiers -> $out")
+    }
+
+    private fun deviceDiff(args: List<String>) = withClient(args) { client ->
+        val file = args.firstPathOrNull() ?: error("Missing backup.json")
+        val expected = backupCodec.fromJson(file.readText())
+        val actual = metadataCodec.decode(client.dumpMetadatas()).vault
+        val diff = differ.diff(before = actual, after = expected)
+
+        if (!diff.hasChanges) {
+            println("No identifier changes between device and $file")
+            return@withClient
+        }
+
+        println("Diff device -> $file")
+        diff.added.forEach { entry ->
+            println("+ ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+        }
+        diff.removed.forEach { entry ->
+            println("- ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+        }
+        diff.changedCharsets.forEach { change ->
+            println(
+                "~ ${change.after.nickname} " +
+                    "[${change.before.charsets.toLedgerNames().joinToString(",")}] -> " +
+                    "[${change.after.charsets.toLedgerNames().joinToString(",")}]",
+            )
+        }
+    }
+
+    private fun devicePush(args: List<String>) = withClient(args) { client ->
+        val file = args.firstPathOrNull() ?: error("Missing backup.json")
+        val text = file.readText()
+        val inspection = backupCodec.inspect(text)
+        val vault = inspection.preferredVault
+        val dangerousOverride = args.hasFlag("--dangerous-override")
+        validator.validate(vault).throwIfInvalid()
+        val info = client.getAppInfo()
+        if (args.hasFlag("--hid") && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
+            error(
+                "Real-device push is blocked for Passwords ${info.version}. " +
+                    "Update the Ledger app to 1.3.1 or newer before writing real hardware.",
+            )
+        }
+        val config = client.getAppConfig()
+        val mode = if (args.hasFlag("--hid")) PushSafetyMode.HardwareSafe else PushSafetyMode.Standard
+        val assessment = LedgerPushRiskPolicy(config.storageSize).assess(vault, mode, inspection.findings)
+        when (assessment.decision) {
+            PushRiskDecision.Allow -> Unit
+            PushRiskDecision.Warn -> assessment.summaryLines().forEach { println("warning: $it") }
+            PushRiskDecision.Block -> {
+                if (!args.hasFlag("--hid") || !dangerousOverride) {
+                    val advice =
+                        if (args.hasFlag("--hid")) {
+                            "\nRetry with --dangerous-override only for explicit debug testing."
+                        } else {
+                            ""
+                        }
+                    error("Push blocked by companion safety policy:\n${assessment.summaryLines().joinToString("\n")}$advice")
+                }
+                assessment.summaryLines().forEach { println("warning: $it") }
+                println("warning: dangerous override enabled, continuing with a real-device push.")
+            }
+        }
+        val raw = backupCodec.rawFromJson(text)
+        client.loadMetadatas(raw)
+        println("Pushed ${vault.entries.size} identifiers from $file")
+    }
+
+    private fun deviceVerify(args: List<String>) = withClient(args) { client ->
+        val file = args.firstPathOrNull() ?: error("Missing backup.json")
+        val expected = backupCodec.rawFromJson(file.readText())
+        val actual = client.dumpMetadatas(storageSize = expected.size)
+        if (expected.contentEquals(actual)) {
+            println("OK: device metadata matches $file")
+        } else {
+            val mismatches = expected.indices.count { expected[it] != actual[it] }
+            error("Device metadata differs from $file ($mismatches differing bytes)")
+        }
+    }
+
+    private fun <T> withClient(args: List<String>, block: suspend (LedgerPasswordsClient) -> T): T {
+        transportFactory(args).use { transport ->
+            return runBlocking {
+                block(LedgerPasswordsClient(transport))
+            }
+        }
     }
 
     private fun printHelp() {
@@ -149,7 +289,12 @@ class LedgerPwCli {
               ledger-pw file edit <backup.json> <nickname> --charset all|upper,lower,numbers --out <out.json>
               ledger-pw file export-raw <backup.json> --out <metadata.bin>
 
-            Device commands are placeholders until a real transport is implemented.
+            Device commands (Speculos TCP by default, add --hid for a real Ledger over USB HID):
+              ledger-pw device info [--hid] [--server 127.0.0.1] [--port 9999]
+              ledger-pw device pull --out <backup.json> [--hid] [--server 127.0.0.1] [--port 9999]
+              ledger-pw device diff <backup.json> [--hid] [--server 127.0.0.1] [--port 9999]
+              ledger-pw device push <backup.json> [--hid] [--dangerous-override] [--server 127.0.0.1] [--port 9999]
+              ledger-pw device verify <backup.json> [--hid] [--server 127.0.0.1] [--port 9999]
             """.trimIndent(),
         )
     }
@@ -168,3 +313,9 @@ private fun List<String>.option(name: String): String? {
 }
 
 private fun List<String>.requiredOption(name: String): String = option(name) ?: error("Missing required option $name")
+private fun List<String>.hasFlag(name: String): Boolean = contains(name)
+
+private fun List<String>.firstPathOrNull(): Path? {
+    val value = firstOrNull { !it.startsWith("--") && Path.of(it).exists() }
+    return value?.let(Path::of)
+}

@@ -67,11 +67,27 @@ class LedgerPasswordsClient(
                 cla = ApduConstants.CLA_PASSWORDS,
                 ins = ApduConstants.INS_DUMP_METADATAS,
             ).ensureSuccess()
-            require(response.data.isNotEmpty()) { "Empty dump response" }
+            require(response.data.size >= 2) { "Dump response must contain a flag and payload bytes" }
             val flag = response.data[0].toInt() and 0xFF
-            output.write(response.data, 1, response.data.size - 1)
-            if (flag == ApduConstants.LAST_CHUNK && output.size() < expectedSize) {
-                error("$expectedSize bytes requested but only ${output.size()} bytes available")
+            require(flag == ApduConstants.MORE_DATA_INCOMING || flag == ApduConstants.LAST_CHUNK) {
+                "Unexpected dump flag: 0x${flag.toString(16)}"
+            }
+
+            val chunkSize = response.data.size - 1
+            val nextSize = output.size() + chunkSize
+            require(nextSize <= expectedSize) {
+                "Dump response exceeds expected size: $nextSize bytes for target $expectedSize"
+            }
+
+            output.write(response.data, 1, chunkSize)
+            if (flag == ApduConstants.LAST_CHUNK) {
+                require(output.size() == expectedSize) {
+                    "$expectedSize bytes requested but only ${output.size()} bytes available"
+                }
+                break
+            }
+            require(output.size() < expectedSize) {
+                "Dump response reached $expectedSize bytes without LAST_CHUNK flag"
             }
         }
         return output.toByteArray().copyOf(expectedSize)

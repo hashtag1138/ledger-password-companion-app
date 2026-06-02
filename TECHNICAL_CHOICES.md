@@ -15,10 +15,10 @@ Alternative future : migrer `core` et `ledger-protocol` en Kotlin Multiplatform 
 - JDK 17.
 - Versions de Kotlin, Android Gradle Plugin, Compose et coroutines centralisées dans `gradle/libs.versions.toml`.
 
-Le wrapper Gradle n'est pas inclus pour éviter d'ajouter un JAR généré dans le squelette. Après extraction, générer le wrapper avec une version compatible avec l'Android Gradle Plugin déclaré :
+Le wrapper Gradle est inclus et doit être utilisé pour tous les builds du repo :
 
 ```bash
-gradle wrapper
+./gradlew
 ```
 
 ## Modules
@@ -58,7 +58,7 @@ Contient :
 - client Ledger Passwords ;
 - transport abstrait ;
 - fake transport ;
-- futur framing USB/HID.
+- framing USB/HID partagé.
 
 Ne contient pas :
 
@@ -199,15 +199,20 @@ Posture :
 
 ## Stratégie d'implémentation Codex
 
-Ordre conseillé :
+Socle déjà réalisé :
 
-1. faire compiler `core` ;
-2. compléter tests `core` ;
-3. faire compiler `ledger-protocol` ;
-4. compléter tests codec ;
-5. stabiliser `BackupJsonCodec` ;
-6. finaliser CLI offline ;
-7. implémenter fake transport complet ;
-8. ajouter transport Speculos ou PC HID ;
-9. finaliser Android offline ;
-10. implémenter Android USB.
+1. compilation `core` / `ledger-protocol` / `cli` / `android-app` ;
+2. tests offline codec, client, fake transport et CLI ;
+3. stabilisation `BackupJsonCodec` ;
+4. commandes CLI offline et device ;
+5. transports Speculos, PC HID et Android USB ;
+6. premier flow Android de sync USB ;
+7. stockage local Android persistant et édition locale ;
+8. import/export `backup.json` Android via Storage Access Framework.
+
+Prochain ordre conseillé :
+
+1. rejouer le chemin d'écriture sous Speculos avant toute nouvelle tentative de `push` Android sur vrai device ;
+2. valider sur vrai Ledger Android en lecture seule et ajuster la robustesse USB terrain ;
+3. ajouter un vrai merge/conflit avant remplacement local après `pull` ;
+4. ajouter un écran de confirmation/diff avant `push`.

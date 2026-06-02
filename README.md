@@ -28,33 +28,36 @@ ledger-passwords-companion/
 
 ## État actuel
 
-Ce repository est un **squelette orienté implémentation Codex**. Il contient :
+Le repository n'est plus seulement un squelette. Il contient maintenant :
 
-- les modules Gradle ;
-- les modèles métier ;
-- un codec metadata Ledger déjà structuré ;
-- un client APDU avec transport abstrait et fake transport ;
-- une CLI offline minimale ;
-- une app Android Compose minimale ;
+- les modules Gradle avec wrapper inclus ;
+- les modèles métier, la validation et le diff ;
+- le codec metadata Ledger et le codec `backup.json` ;
+- le client APDU avec fake transport ;
+- le framing HID Ledger partagé ;
+- un transport Speculos TCP ;
+- un transport PC USB HID ;
+- une CLI offline et device (`info`, `pull`, `diff`, `push`, `verify`) ;
+- des scripts de lancement et de smoke test Speculos ;
+- une app Android Compose avec stockage local persistant, édition locale, import/export `backup.json` et flow USB réel de synchronisation ;
 - les docs de plan d'implémentation et choix techniques.
 
-Les transports réels USB/HID et Android USB sont volontairement laissés sous forme de TODO structurés. Ils doivent être implémentés après validation du codec et des tests offline.
+Ce qui manque encore surtout côté produit :
+
+- l'analyse complète de l'incident de reset observé sur vrai Ledger après certains `push` puis usages device-side ;
+- la validation sur vrai device Ledger côté Android ;
+- une stratégie de merge plus fine après lecture du device ;
+- un écran de confirmation/diff avant écriture vers le Ledger.
 
 ## Démarrage
 
 Pré-requis recommandés :
 
 - JDK 17 ;
-- Gradle installé localement ou wrapper généré ;
+- wrapper Gradle inclus ;
 - Android Studio récent ;
 - Android SDK correspondant au `compileSdk` déclaré dans `gradle/libs.versions.toml` ;
 - un Ledger avec l'app **Passwords** ouverte pour les tests device.
-
-Créer le wrapper Gradle si besoin :
-
-```bash
-gradle wrapper
-```
 
 Compiler les modules JVM :
 
@@ -70,11 +73,51 @@ Lancer la CLI offline après `installDist` :
 ./cli/build/install/ledger-pw/bin/ledger-pw file validate test-fixtures/backup-example.json
 ```
 
+Tester l'app Passwords sans vrai Ledger via Speculos :
+
+```bash
+scripts/build-passwords-app.sh
+scripts/run-speculos-passwords.sh build/speculos/app-passwords/bin/app.elf
+scripts/speculos-smoke.sh --api-port 5000 --first-run --auto-approve
+```
+
+Le write path doit passer par Speculos avant toute nouvelle tentative d'écriture sur vrai device. Voir [`docs/speculos-testing.md`](docs/speculos-testing.md).
+
+À date, le companion bloque le `push` vers un vrai Ledger si l'app Passwords détectée est antérieure à `1.3.1`. La lecture seule (`refresh`, `pull`, `compare`, `verify`) reste autorisée.
+
 Ouvrir l'app Android :
 
 ```bash
 ./gradlew :android-app:assembleDebug
 ```
+
+Tester l'app Android sur émulateur avec Speculos :
+
+```bash
+scripts/android-emulator-speculos-test.sh --first-run
+```
+
+Ce script :
+
+- démarre l'auto-approbation Speculos côté host ;
+- nettoie les données de l'app sur l'émulateur ;
+- exécute le `connectedDebugAndroidTest` Android contre `10.0.2.2:10100`.
+
+Pour un test manuel, l'app expose aussi ce mode dans l'écran de sync :
+
+```bash
+adb -s emulator-5554 install -r android-app/build/outputs/apk/debug/android-app-debug.apk
+adb -s emulator-5554 shell am start -n com.ledgerpasswords.companion/com.ledgerpasswords.companion.android.MainActivity
+```
+
+Puis :
+
+- choisir `Speculos` ;
+- laisser `10.0.2.2` comme host dans l'émulateur Android ;
+- mettre le port APDU de Speculos, par défaut `10100` dans ce repo ;
+- utiliser `Rafraîchir`, puis `Importer`, `Comparer`, `Exporter`, `Vérifier`.
+
+L'émulateur Android ne valide pas l'USB OTG réel. Il sert à tester le flow Android complet contre Speculos sans toucher un vrai Ledger.
 
 ## Invariants Ledger Passwords
 
@@ -87,14 +130,32 @@ Le projet encode ces contraintes dès le départ :
 - charset `0x00` ou `0xFF` = tous les sets ;
 - pas d'APDU add/delete/update unitaire côté Ledger : on modifie localement puis on réécrit tout le bloc metadata.
 
-## Documentation principale
+## Documentation
+
+### Utilisateur
+
+- [`docs/user/README.md`](docs/user/README.md) : point d'entrée utilisateur.
+- [`docs/user/android-app.md`](docs/user/android-app.md) : installer et utiliser l'app Android.
+- [`docs/user/safety-and-limits.md`](docs/user/safety-and-limits.md) : sécurité, limites et garde-fous.
+
+### Développeur
+
+- [`docs/developer/README.md`](docs/developer/README.md) : point d'entrée développeur.
+- [`docs/developer/architecture.md`](docs/developer/architecture.md) : design du repo et ordre de lecture du code.
+- [`docs/developer/testing.md`](docs/developer/testing.md) : reproduire builds, tests et smoke tests.
+- [`docs/developer/fuzzing.md`](docs/developer/fuzzing.md) : harness de fuzzing et campagnes Speculos.
+
+### Références techniques
 
 - [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) : plan détaillé phase par phase.
 - [`TECHNICAL_CHOICES.md`](TECHNICAL_CHOICES.md) : choix techniques, dépendances, architecture.
+- [`docs/speculos-testing.md`](docs/speculos-testing.md) : mode d'emploi Speculos détaillé.
 - [`docs/ledger-passwords-protocol.md`](docs/ledger-passwords-protocol.md) : format metadata et APDU.
 - [`docs/security.md`](docs/security.md) : sécurité, garde-fous et menaces.
 - [`docs/sync-flows.md`](docs/sync-flows.md) : flows pull/push/merge.
-- [`docs/ui-wireframes.md`](docs/ui-wireframes.md) : écrans Android MVP.
+- [`docs/ui-wireframes.md`](docs/ui-wireframes.md) : wireframes et structure UI.
+- [`docs/fuzzing-findings-report.md`](docs/fuzzing-findings-report.md) : synthèse des findings fuzzing.
+- [`docs/companion-mitigation-plan.md`](docs/companion-mitigation-plan.md) : plan de mitigation côté companion.
 - [`CODEX_PROMPT.md`](CODEX_PROMPT.md) : prompt prêt à donner à Codex pour continuer l'implémentation.
 
 ## Licence

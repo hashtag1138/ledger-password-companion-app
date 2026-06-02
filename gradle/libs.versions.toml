@@ -6,6 +6,9 @@ activityCompose = "1.9.3"
 coroutines = "1.9.0"
 serializationJson = "1.7.3"
 junitJupiter = "5.11.4"
+hid4java = "0.8.0"
+androidxTestExtJunit = "1.2.1"
+androidxTestRunner = "1.6.2"
 
 androidCompileSdk = "35"
 androidMinSdk = "26"
@@ -18,12 +21,18 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "androidxTestExtJunit" }
+androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junitJupiter" }
+hid4java = { module = "org.hid4java:hid4java", version.ref = "hid4java" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

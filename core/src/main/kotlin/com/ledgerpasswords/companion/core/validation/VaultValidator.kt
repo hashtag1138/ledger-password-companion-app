@@ -23,20 +23,42 @@ class VaultValidator(
             val bytes = nickname.toByteArray(Charsets.UTF_8)
 
             if (nickname.isBlank()) {
-                issues += ValidationIssue("blank_nickname", "Nickname must not be blank", nickname)
+                issues += ValidationIssue(code = "blank_nickname", message = "Nickname must not be blank", nickname = nickname)
             }
             if (bytes.size > LedgerPasswordsLimits.MAX_NICKNAME_BYTES) {
                 issues += ValidationIssue(
-                    "nickname_too_long",
-                    "Nickname '$nickname' is ${bytes.size} UTF-8 bytes, max ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES}",
-                    nickname,
+                    code = "nickname_too_long",
+                    message = "Nickname '$nickname' is ${bytes.size} UTF-8 bytes, max ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES}",
+                    nickname = nickname,
                 )
             }
             if (!seen.add(nickname)) {
-                issues += ValidationIssue("duplicate_nickname", "Duplicate nickname: $nickname", nickname)
+                issues += ValidationIssue(code = "duplicate_nickname", message = "Duplicate nickname: $nickname", nickname = nickname)
             }
             if (entry.charsets.bitmask !in 0x00..0xFF) {
-                issues += ValidationIssue("invalid_charset", "Invalid charset bitmask for $nickname", nickname)
+                issues += ValidationIssue(code = "invalid_charset", message = "Invalid charset bitmask for $nickname", nickname = nickname)
+            }
+            if (NicknameSafety.containsDisallowedControlCharacters(nickname)) {
+                issues += ValidationIssue(
+                    code = "control_character",
+                    message = "Nickname '$nickname' contains control characters that are unsafe for Ledger Passwords.",
+                    nickname = nickname,
+                )
+            }
+            if (NicknameSafety.containsDangerousFormatCharacters(nickname)) {
+                issues += ValidationIssue(
+                    code = "dangerous_format_character",
+                    message = "Nickname '$nickname' contains invisible formatting characters that are unsafe for Ledger Passwords.",
+                    nickname = nickname,
+                )
+            }
+            if (NicknameSafety.hasLeadingOrTrailingWhitespace(nickname)) {
+                issues += ValidationIssue(
+                    severity = ValidationSeverity.Warning,
+                    code = "leading_or_trailing_whitespace",
+                    message = "Nickname '$nickname' starts or ends with whitespace.",
+                    nickname = nickname,
+                )
             }
 
             serializedBytes += 3 + bytes.size
@@ -44,8 +66,8 @@ class VaultValidator(
 
         if (serializedBytes > storageSize) {
             issues += ValidationIssue(
-                "storage_overflow",
-                "Serialized vault uses $serializedBytes bytes, storage size is $storageSize",
+                code = "storage_overflow",
+                message = "Serialized vault uses $serializedBytes bytes, storage size is $storageSize",
             )
         }
 

@@ -5,6 +5,8 @@ import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.risk.PushRiskFinding
+import com.ledgerpasswords.companion.core.risk.PushRiskSeverity
 import com.ledgerpasswords.companion.ledger.metadata.DecodedMetadata
 import com.ledgerpasswords.companion.ledger.metadata.Hex
 import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
@@ -15,12 +17,13 @@ import kotlinx.serialization.json.Json
 
 class BackupJsonCodec(
     private val metadataCodec: MetadataCodec = MetadataCodec(),
+) {
     private val json: Json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
         encodeDefaults = true
-    },
-) {
+    }
+
     fun fromJson(text: String): Vault {
         val file = json.decodeFromString(BackupFile.serializer(), text)
         val entries = file.parsed.map { it.toDomain() }
@@ -55,9 +58,108 @@ class BackupJsonCodec(
         }
     }
 
+    fun inspect(text: String): BackupInspection {
+        val file = json.decodeFromString(BackupFile.serializer(), text)
+        val parsedVault = Vault(entries = file.parsed.map { it.toDomain() }, source = VaultSource.BackupFile).sortedByNickname()
+        val findings = mutableListOf<PushRiskFinding>()
+        val raw =
+            if (file.rawMetadatas.isNullOrBlank()) {
+                null
+            } else {
+                runCatching { Hex.decode(file.rawMetadatas) }
+                    .getOrElse { error ->
+                        findings += PushRiskFinding(
+                            severity = PushRiskSeverity.Block,
+                            code = "raw_metadata_decode_failed",
+                            message = "Le champ raw_metadatas n'est pas décodable: ${error.message ?: error::class.java.simpleName}.",
+                        )
+                        null
+                    }
+            }
+
+        if (file.corruptions.isNotEmpty()) {
+            findings += PushRiskFinding(
+                severity = PushRiskSeverity.Block,
+                code = "backup_corruptions_reported",
+                message = "Le backup déclare ${file.corruptions.size} corruption(s) rencontrée(s).",
+            )
+        }
+
+        val decodedRaw =
+            raw?.let { rawBytes ->
+                if (rawBytes.size != file.storageSize) {
+                    findings += PushRiskFinding(
+                        severity = PushRiskSeverity.Block,
+                        code = "raw_storage_size_mismatch",
+                        message = "Le raw metadata fait ${rawBytes.size} octets, mais le backup annonce ${file.storageSize}.",
+                    )
+                }
+                runCatching { metadataCodec.decode(rawBytes) }
+                    .getOrElse { error ->
+                        findings += PushRiskFinding(
+                            severity = PushRiskSeverity.Block,
+                            code = "raw_metadata_invalid",
+                            message = "Le raw metadata n'a pas pu être décodé: ${error.message ?: error::class.java.simpleName}.",
+                        )
+                        null
+                    }
+            }
+
+        val rawVault =
+            decodedRaw?.let { decoded ->
+                if (decoded.corruptions.isNotEmpty()) {
+                    findings += PushRiskFinding(
+                        severity = PushRiskSeverity.Block,
+                        code = "decoded_raw_corruptions",
+                        message = "Le raw metadata décodé contient ${decoded.corruptions.size} corruption(s).",
+                    )
+                }
+                decoded.vault.copy(source = VaultSource.BackupFile).sortedByNickname()
+            }
+
+        if (rawVault != null && rawVault.entries != parsedVault.entries) {
+            findings += PushRiskFinding(
+                severity = PushRiskSeverity.Block,
+                code = "parsed_raw_mismatch",
+                message = "Les entrées parsed et raw_metadatas ne décrivent pas le même vault.",
+            )
+        }
+
+        if (raw != null && rawVault != null) {
+            val reencodedMatches =
+                runCatching { metadataCodec.encode(rawVault).contentEquals(raw) }
+                    .getOrElse { false }
+            if (!reencodedMatches) {
+                findings += PushRiskFinding(
+                    severity = PushRiskSeverity.Block,
+                    code = "raw_not_roundtrip_stable",
+                    message = "Le raw metadata n'est pas stable après decode/encode local.",
+                )
+            }
+        }
+
+        return BackupInspection(
+            file = file,
+            parsedVault = parsedVault,
+            rawVault = rawVault,
+            findings = findings.distinctBy { Triple(it.severity, it.code, it.message) },
+        )
+    }
+
     companion object {
         const val FORMAT = "ledger-passwords-companion.v1"
     }
+}
+
+data class BackupInspection(
+    val file: BackupFile,
+    val parsedVault: Vault,
+    val rawVault: Vault?,
+    val findings: List<PushRiskFinding>,
+) {
+    val hasRawMetadatas: Boolean get() = !file.rawMetadatas.isNullOrBlank()
+    val hasBlockingFindings: Boolean get() = findings.any { it.severity == PushRiskSeverity.Block }
+    val preferredVault: Vault get() = rawVault ?: parsedVault
 }
 
 @Serializable

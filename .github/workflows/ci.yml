@@ -15,12 +15,6 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Validate Gradle wrapper
-        if: hashFiles('gradlew') != ''
         uses: gradle/actions/wrapper-validation@v4
       - name: Run JVM tests
-        run: |
-          if [ -x ./gradlew ]; then
-            ./gradlew :core:test :ledger-protocol:test
-          else
-            echo "Gradle wrapper not committed yet. Run: gradle wrapper"
-          fi
+        run: ./gradlew :core:test :ledger-protocol:test

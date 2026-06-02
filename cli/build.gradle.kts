@@ -19,5 +19,6 @@ tasks.test {
 dependencies {
     implementation(project(":core"))
     implementation(project(":ledger-protocol"))
+    implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit.jupiter)
 }
