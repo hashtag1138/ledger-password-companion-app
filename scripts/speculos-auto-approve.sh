@@ -158,14 +158,11 @@ last_screen=""
 while true; do
     text="$(current_screen_text 2>/dev/null || true)"
     if [[ -n "$text" && "$text" != "$last_screen" ]]; then
-        case "$text" in
-            *"Transfer metadatas"*|*"Overwrite metadatas"*)
-                press_button right
-                ;;
-            *"Approve"*)
-                press_button both
-                ;;
-        esac
+        if [[ "$text" == *"Approve"* ]]; then
+            press_button both
+        elif [[ "$text" == *"Transfer metadatas"* || "$text" == *"Overwrite metadatas"* ]]; then
+            press_button right
+        fi
         last_screen="$text"
     fi
     sleep 0.2

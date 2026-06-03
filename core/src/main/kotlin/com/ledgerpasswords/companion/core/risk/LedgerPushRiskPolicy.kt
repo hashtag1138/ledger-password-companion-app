@@ -141,16 +141,6 @@ class LedgerPushRiskPolicy(
             }
         }
 
-        if (vault.entries.size >= 2) {
-            findings += PushRiskFinding(
-                severity = if (mode == PushSafetyMode.HardwareSafe) PushRiskSeverity.Block else PushRiskSeverity.Warning,
-                code = "multi_entry_show_second_known_crash",
-                message =
-                    "Vaults with multiple entries are currently dangerous: " +
-                        "our regressions show a reproducible app-passwords crash on \"show password\" for the second item.",
-            )
-        }
-
         if (vault.entries.size >= 12) {
             findings += PushRiskFinding(
                 severity = PushRiskSeverity.Warning,

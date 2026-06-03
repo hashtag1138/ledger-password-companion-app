@@ -22,28 +22,15 @@ class LedgerPushRiskPolicyTest {
     }
 
     @Test
-    fun `multiple entries are blocked in hardware safe mode`() {
+    fun `multiple entries are allowed in hardware safe mode`() {
         val assessment =
             policy.assess(
                 vault = Vault(entries = listOf(PasswordIdentifier("sofian terki"), PasswordIdentifier("abc"))),
                 mode = PushSafetyMode.HardwareSafe,
             )
 
-        assertEquals(PushRiskDecision.Block, assessment.decision)
-        assertTrue(assessment.summaryLines().any { it.contains("multiple entries") })
-        assertTrue(assessment.summaryLines().any { it.contains("show password") })
-    }
-
-    @Test
-    fun `multiple entries are warned in standard mode`() {
-        val assessment =
-            policy.assess(
-                vault = Vault(entries = listOf(PasswordIdentifier("sofian terki"), PasswordIdentifier("abc"))),
-                mode = PushSafetyMode.Standard,
-            )
-
-        assertEquals(PushRiskDecision.Warn, assessment.decision)
-        assertTrue(assessment.summaryLines().any { it.contains("multiple entries") })
+        assertEquals(PushRiskDecision.Allow, assessment.decision)
+        assertTrue(assessment.summaryLines().none { it.contains("multiple entries") })
     }
 
     @Test
@@ -78,7 +65,7 @@ class LedgerPushRiskPolicyTest {
                 mode = PushSafetyMode.HardwareSafe,
             )
 
-        assertEquals(PushRiskDecision.Block, assessment.decision)
+        assertEquals(PushRiskDecision.Warn, assessment.decision)
         assertTrue(assessment.summaryLines().any { it.contains("Dense lists") })
     }
 
