@@ -44,6 +44,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.ledgerpasswords.companion.android.storage.DiagnosticLogStore
 import com.ledgerpasswords.companion.android.storage.LocalVaultStore
+import com.ledgerpasswords.companion.android.storage.SyncShadowState
+import com.ledgerpasswords.companion.android.storage.SyncShadowStore
+import com.ledgerpasswords.companion.android.storage.SyncTargetKind
 import com.ledgerpasswords.companion.android.storage.UiPreferences
 import com.ledgerpasswords.companion.android.storage.UiPreferencesStore
 import com.ledgerpasswords.companion.android.usb.AndroidUsbLedgerTransport
@@ -75,6 +78,7 @@ import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
 import com.ledgerpasswords.companion.ledger.transport.LedgerTransport
 import com.ledgerpasswords.companion.ledger.transport.SpeculosTransport
 import java.io.File
+import java.time.Instant
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlinx.coroutines.runBlocking
@@ -82,6 +86,7 @@ import kotlinx.coroutines.runBlocking
 class MainActivity : ComponentActivity() {
     private val usbManager by lazy { getSystemService(Context.USB_SERVICE) as UsbManager }
     private val localVaultStore by lazy { LocalVaultStore(File(filesDir, LOCAL_VAULT_FILE_NAME)) }
+    private val syncShadowStore by lazy { SyncShadowStore(File(filesDir, SYNC_SHADOW_FILE_NAME)) }
     private val uiPreferencesStore by lazy { UiPreferencesStore(File(filesDir, UI_PREFERENCES_FILE_NAME)) }
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val backupJsonCodec = BackupJsonCodec()
@@ -122,6 +127,7 @@ class MainActivity : ComponentActivity() {
     private var uiPreferences by mutableStateOf(UiPreferences())
     private var appDialogState by mutableStateOf<AppDialogState?>(null)
     private var hardwareDangerousOverrideEnabled by mutableStateOf(false)
+    private var syncShadowState by mutableStateOf<SyncShadowState?>(null)
 
     private val usbReceiver =
         object : BroadcastReceiver() {
@@ -186,6 +192,7 @@ class MainActivity : ComponentActivity() {
         DiagnosticLogStore.initialize(this)
         DiagnosticLogStore.mark("MainActivity.onCreate")
         loadLocalVault()
+        loadSyncShadow()
         loadUiPreferences()
         registerUsbReceiver()
         refreshSelectedTransport(preferredDevice = intent.usbDeviceOrNull())
@@ -304,6 +311,10 @@ class MainActivity : ComponentActivity() {
 
     private fun loadUiPreferences() {
         uiPreferences = uiPreferencesStore.load()
+    }
+
+    private fun loadSyncShadow() {
+        syncShadowState = syncShadowStore.load()
     }
 
     private fun updateUiPreferences(transform: UiPreferences.() -> UiPreferences) {
@@ -466,6 +477,27 @@ class MainActivity : ComponentActivity() {
             mergedVault = mergedVault,
         )
     }
+
+    private fun buildSyncShadowState(
+        target: SyncTarget,
+        vault: Vault,
+        storageSize: Int,
+    ): SyncShadowState =
+        SyncShadowState(
+            lastSyncedVault = vault.copy(source = VaultSource.Local).sortedByNickname(),
+            targetKind =
+                when (target) {
+                    is SyncTarget.Usb -> SyncTargetKind.Usb
+                    is SyncTarget.Speculos -> SyncTargetKind.Speculos
+                },
+            targetDescriptor =
+                when (target) {
+                    is SyncTarget.Usb -> target.device.deviceName
+                    is SyncTarget.Speculos -> "${target.host}:${target.port}"
+                },
+            storageSize = storageSize,
+            updatedAtEpochMillis = Instant.now().toEpochMilli(),
+        )
 
     private fun buildPushConfirmationDialogState(): PushConfirmationDialogState {
         val assessment = assessLocalPushRisk(localVault, effectiveStorageSize(), PushSafetyMode.HardwareSafe)
@@ -1301,6 +1333,7 @@ class MainActivity : ComponentActivity() {
                 diffSummary = renderLedgerDiffSummary(diff),
                 diffLines = renderLedgerDiffLines(diff),
                 replaceLocalVault = mergedVault,
+                replaceSyncShadow = buildSyncShadowState(target, mergedVault, config.storageSize),
                 showVerifyCallToAction = false,
             )
         }
@@ -1580,6 +1613,7 @@ class MainActivity : ComponentActivity() {
     private fun updateSyncStateFromWorker(update: SyncUpdate) {
         runOnUiThread {
             var statusMessage = update.statusMessage
+            var localPersistenceSucceeded = true
             update.deferredSynchronizationPrompt?.let { prompt ->
                 appDialogState =
                     AppDialogState.ConfirmSynchronization(
@@ -1611,8 +1645,19 @@ class MainActivity : ComponentActivity() {
                             "Local vault replaced from the target.",
                             backupJsonText = update.replaceLocalBackupJsonText,
                         )
+                    localPersistenceSucceeded = persistence.persisted
                     if (!persistence.persisted) {
                         statusMessage = "${update.statusMessage} The local replacement could not be persisted."
+                    }
+                }
+            }
+            if (localPersistenceSucceeded) {
+                update.replaceSyncShadow?.let { shadow ->
+                    val persistedShadow = runCatching { syncShadowStore.save(shadow) }.getOrNull()
+                    if (persistedShadow != null) {
+                        syncShadowState = persistedShadow
+                    } else {
+                        statusMessage = "$statusMessage The sync shadow could not be persisted."
                     }
                 }
             }
@@ -1668,6 +1713,7 @@ class MainActivity : ComponentActivity() {
         private const val EXPECTED_APP_NAME = "Passwords"
         private const val MIN_SAFE_REAL_DEVICE_VERSION_LABEL = "1.3.1"
         private const val LOCAL_VAULT_FILE_NAME = "local-vault.json"
+        private const val SYNC_SHADOW_FILE_NAME = "sync-shadow.properties"
         private const val UI_PREFERENCES_FILE_NAME = "ui-preferences.properties"
         private const val DEFAULT_BACKUP_FILE_NAME = "ledger-passwords-backup.json"
         private const val EMULATOR_HOST_LOOPBACK = "10.0.2.2"

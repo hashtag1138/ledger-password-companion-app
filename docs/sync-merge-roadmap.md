@@ -105,13 +105,13 @@ Then compute a 3-way merge:
 
 ### Implementation Checklist
 
-- [ ] add a dedicated local sync state store
-- [ ] define a 3-way merge planner
+- [x] add a dedicated local sync state store
+- [x] define a 3-way merge planner
 - [ ] propagate deletions correctly
 - [ ] detect modify-vs-delete conflicts
 - [ ] detect modify-vs-modify conflicts
 - [ ] add a conflict resolution UI
-- [ ] update the sync shadow only after a successful end-to-end sync
+- [x] update the sync shadow only after a successful end-to-end sync
 - [ ] add tests for add/update/delete convergence
 
 ### Acceptance Criteria

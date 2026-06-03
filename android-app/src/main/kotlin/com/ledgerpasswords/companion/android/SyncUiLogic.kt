@@ -1,5 +1,6 @@
 package com.ledgerpasswords.companion.android
 
+import com.ledgerpasswords.companion.android.storage.SyncShadowState
 import com.ledgerpasswords.companion.core.diff.VaultDiff
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.sync.VaultMergePlan
@@ -28,6 +29,7 @@ internal data class SyncUpdate(
     val diffLines: List<String>? = null,
     val replaceLocalVault: Vault? = null,
     val replaceLocalBackupJsonText: String? = null,
+    val replaceSyncShadow: SyncShadowState? = null,
     val deferredLocalReplacementPrompt: DeferredLocalReplacementPrompt? = null,
     val deferredSynchronizationPrompt: DeferredSynchronizationPrompt? = null,
     val clearDeviceEntries: Boolean = false,
