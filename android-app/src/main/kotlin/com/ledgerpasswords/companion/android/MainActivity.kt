@@ -74,6 +74,8 @@ import com.ledgerpasswords.companion.core.validation.VaultValidator
 import com.ledgerpasswords.companion.ledger.backup.BackupInspection
 import com.ledgerpasswords.companion.ledger.backup.BackupApp
 import com.ledgerpasswords.companion.ledger.backup.BackupJsonCodec
+import com.ledgerpasswords.companion.ledger.client.AppConfig
+import com.ledgerpasswords.companion.ledger.client.AppInfo
 import com.ledgerpasswords.companion.ledger.client.LedgerPasswordsClient
 import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
 import com.ledgerpasswords.companion.ledger.transport.LedgerTransport
@@ -1301,17 +1303,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            SyncUpdate(
-                status = SyncStatus.Success,
-                statusMessage = "Synchronization plan ready. Review the merge and confirm the write.",
-                appName = info.name,
-                appVersion = info.version,
-                storageSize = config.storageSize,
-                deviceEntries = deviceVault.entries.size,
-                diffSummary = summary,
-                diffLines = lines,
-                deferredSynchronizationPrompt = buildSynchronizationPrompt(target, summary, mergedVault, assessment),
-                showVerifyCallToAction = false,
+            writeMergedVault(
+                client = client,
+                target = target,
+                info = info,
+                config = config,
+                mergedVault = mergedVault,
             )
         }
     }
@@ -1391,29 +1388,25 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val prompt = buildSynchronizationPrompt(target, renderResolvedSynchronizationSummary(state), mergedVault, assessment)
         syncUiState =
             syncUiState.copy(
                 status = SyncStatus.Success,
-                statusMessage = "All synchronization conflicts resolved. Review the merged write and confirm.",
+                statusMessage = "All synchronization conflicts resolved. Writing the merged vault...",
                 diffSummary = renderResolvedSynchronizationSummary(state),
                 diffLines = renderResolvedSynchronizationLines(state),
                 showVerifyCallToAction = false,
             )
-        appDialogState =
-            AppDialogState.ConfirmSynchronization(
-                title = prompt.title,
-                body = prompt.body,
-                confirmLabel = prompt.confirmLabel,
-                cancelMessage = prompt.cancelMessage,
-                mergedVault = mergedVault,
-            )
+        executeSynchronization(mergedVault)
     }
 
     private fun executeSynchronization(dialog: AppDialogState.ConfirmSynchronization) {
+        executeSynchronization(dialog.mergedVault)
+    }
+
+    private fun executeSynchronization(mergedVault: Vault) {
         val target = requireCurrentTarget() ?: return
-        val mergedVault = dialog.mergedVault.copy(source = VaultSource.Local).sortedByNickname()
-        DiagnosticLogStore.mark("executeSynchronization target=${target.label} mergedEntries=${mergedVault.entries.size}")
+        val normalizedMergedVault = mergedVault.copy(source = VaultSource.Local).sortedByNickname()
+        DiagnosticLogStore.mark("executeSynchronization target=${target.label} mergedEntries=${normalizedMergedVault.entries.size}")
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.Loading,
@@ -1445,7 +1438,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val config = client.getAppConfig()
-            val assessment = assessMergedPushRisk(mergedVault, config.storageSize, target.pushSafetyMode())
+            val assessment = assessMergedPushRisk(normalizedMergedVault, config.storageSize, target.pushSafetyMode())
             if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.ValidationError,
@@ -1475,49 +1468,80 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            val raw = MetadataCodec(config.storageSize).encode(mergedVault)
-            client.loadMetadatas(raw)
-            updateSyncStateFromWorker(
-                SyncUpdate(
-                    status = SyncStatus.Verifying,
-                    statusMessage = target.userActionMessage("Write completed. Verifying Ledger...", "Write completed. Verifying Speculos..."),
-                    appName = info.name,
-                    appVersion = info.version,
-                    storageSize = config.storageSize,
-                    showVerifyCallToAction = false,
-                ),
+            writeMergedVault(
+                client = client,
+                target = target,
+                info = info,
+                config = config,
+                mergedVault = normalizedMergedVault,
             )
+        }
+    }
 
-            val deviceVault = metadataCodec.decode(client.dumpMetadatas(config.storageSize)).vault
-            val diff = differ.diff(before = deviceVault, after = mergedVault)
-            if (diff.hasChanges) {
-                return@performLedgerAction SyncUpdate(
-                    status = SyncStatus.ValidationError,
-                    statusMessage = "Synchronization wrote to the target, but verification did not match the merged result.",
-                    appName = info.name,
-                    appVersion = info.version,
-                    storageSize = config.storageSize,
-                    deviceEntries = deviceVault.entries.size,
-                    diffSummary = renderLedgerDiffSummary(diff),
-                    diffLines = renderLedgerDiffLines(diff),
-                    showVerifyCallToAction = false,
-                )
-            }
-
+    private suspend fun writeMergedVault(
+        client: LedgerPasswordsClient,
+        target: SyncTarget,
+        info: AppInfo,
+        config: AppConfig,
+        mergedVault: Vault,
+    ): SyncUpdate {
+        updateSyncStateFromWorker(
             SyncUpdate(
-                status = SyncStatus.Success,
-                statusMessage = "Synchronization completed. Local and target now share the merged vault.",
+                status = SyncStatus.Loading,
+                statusMessage =
+                    target.userActionMessage(
+                        "Merged vault ready. Writing to the Ledger...",
+                        "Merged vault ready. Writing to Speculos...",
+                    ),
+                appName = info.name,
+                appVersion = info.version,
+                storageSize = config.storageSize,
+                showVerifyCallToAction = false,
+            ),
+        )
+
+        val raw = MetadataCodec(config.storageSize).encode(mergedVault)
+        client.loadMetadatas(raw)
+        updateSyncStateFromWorker(
+            SyncUpdate(
+                status = SyncStatus.Verifying,
+                statusMessage = target.userActionMessage("Write completed. Verifying Ledger...", "Write completed. Verifying Speculos..."),
+                appName = info.name,
+                appVersion = info.version,
+                storageSize = config.storageSize,
+                showVerifyCallToAction = false,
+            ),
+        )
+
+        val deviceVault = metadataCodec.decode(client.dumpMetadatas(config.storageSize)).vault
+        val diff = differ.diff(before = deviceVault, after = mergedVault)
+        if (diff.hasChanges) {
+            return SyncUpdate(
+                status = SyncStatus.ValidationError,
+                statusMessage = "Synchronization wrote to the target, but verification did not match the merged result.",
                 appName = info.name,
                 appVersion = info.version,
                 storageSize = config.storageSize,
                 deviceEntries = deviceVault.entries.size,
                 diffSummary = renderLedgerDiffSummary(diff),
                 diffLines = renderLedgerDiffLines(diff),
-                replaceLocalVault = mergedVault,
-                replaceSyncShadow = buildSyncShadowState(target, mergedVault, config.storageSize),
                 showVerifyCallToAction = false,
             )
         }
+
+        return SyncUpdate(
+            status = SyncStatus.Success,
+            statusMessage = "Synchronization completed. Local and target now share the merged vault.",
+            appName = info.name,
+            appVersion = info.version,
+            storageSize = config.storageSize,
+            deviceEntries = deviceVault.entries.size,
+            diffSummary = renderLedgerDiffSummary(diff),
+            diffLines = renderLedgerDiffLines(diff),
+            replaceLocalVault = mergedVault,
+            replaceSyncShadow = buildSyncShadowState(target, mergedVault, config.storageSize),
+            showVerifyCallToAction = false,
+        )
     }
 
     private fun pushToLedger() {
