@@ -4,6 +4,9 @@ import com.ledgerpasswords.companion.core.diff.VaultDiffer
 import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
+import com.ledgerpasswords.companion.core.sync.ThreeWayConflictReason
+import com.ledgerpasswords.companion.core.sync.ThreeWayMergeConflict
+import com.ledgerpasswords.companion.core.sync.ThreeWayVaultMergePlanner
 import com.ledgerpasswords.companion.core.sync.VaultMergePlanner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -12,6 +15,7 @@ import org.junit.jupiter.api.Test
 class SyncUiLogicTest {
     private val differ = VaultDiffer()
     private val mergePlanner = VaultMergePlanner()
+    private val threeWayMergePlanner = ThreeWayVaultMergePlanner()
 
     @Test
     fun `applySyncUpdate clears stale device counters and diff lines`() {
@@ -214,5 +218,60 @@ class SyncUiLogicTest {
             ),
             renderSynchronizationLines(plan),
         )
+    }
+
+    @Test
+    fun `renderThreeWaySynchronizationSummary returns concise merge counts`() {
+        val plan =
+            threeWayMergePlanner.plan(
+                base = Vault(entries = listOf(PasswordIdentifier("github", CharsetPolicy.fromCli("lower")))),
+                local =
+                    Vault(
+                        entries = listOf(
+                            PasswordIdentifier("github", CharsetPolicy.fromCli("upper,lower,numbers")),
+                            PasswordIdentifier("proton"),
+                        ),
+                    ),
+                remote =
+                    Vault(
+                        entries = listOf(
+                            PasswordIdentifier("gmail"),
+                            PasswordIdentifier("github", CharsetPolicy.fromCli("lower")),
+                        ),
+                    ),
+            )
+
+        assertEquals("1 local addition • 1 target addition • 1 local update", renderThreeWaySynchronizationSummary(plan))
+    }
+
+    @Test
+    fun `renderResolvedSynchronizationLines removes unresolved conflicts and appends decisions`() {
+        val prompt =
+            DeferredSynchronizationConflictPrompt(
+                pendingConflicts =
+                    listOf(
+                        ThreeWayMergeConflict(
+                            nickname = "github",
+                            baseEntry = PasswordIdentifier("github", CharsetPolicy.fromCli("lower")),
+                            localEntry = PasswordIdentifier("github", CharsetPolicy.fromCli("upper,lower,numbers")),
+                            remoteEntry = null,
+                            reason = ThreeWayConflictReason.LocalChangedRemoteRemoved,
+                        ),
+                    ),
+                autoMergedEntries = listOf(PasswordIdentifier("proton")),
+                summary = "1 local addition • 1 conflict",
+                lines = listOf("Keep local addition: proton [ALL_SETS]", "Conflict: github [Local=UPPERCASE,LOWERCASE,NUMBERS] vs [Target=removed]"),
+                chosenNotes = listOf("Resolved: github -> keep local [UPPERCASE,LOWERCASE,NUMBERS]"),
+                storageSize = 4096,
+            )
+
+        assertEquals(
+            listOf(
+                "Keep local addition: proton [ALL_SETS]",
+                "Resolved: github -> keep local [UPPERCASE,LOWERCASE,NUMBERS]",
+            ),
+            renderResolvedSynchronizationLines(prompt),
+        )
+        assertEquals("Manual resolution complete • 1 conflict resolved", renderResolvedSynchronizationSummary(prompt))
     }
 }

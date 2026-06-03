@@ -18,6 +18,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
+import com.ledgerpasswords.companion.core.sync.ThreeWayConflictReason
+import com.ledgerpasswords.companion.core.sync.ThreeWayMergeConflict
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -128,6 +131,50 @@ class LedgerPasswordsCompanionUiTest {
         composeRule.waitUntilNodeCount("Delete this identifier?", expectedCount = 0)
         assertTrue(confirmed)
     }
+
+    @Test
+    fun syncConflictDialogRoutesKeepTargetChoiceWithoutCancelling() {
+        var dialogState by mutableStateOf<AppDialogState?>(
+            AppDialogState.ResolveSynchronizationConflict(
+                DeferredSynchronizationConflictPrompt(
+                    pendingConflicts =
+                        listOf(
+                            ThreeWayMergeConflict(
+                                nickname = "github",
+                                baseEntry = PasswordIdentifier("github"),
+                                localEntry = PasswordIdentifier("github"),
+                                remoteEntry = null,
+                                reason = ThreeWayConflictReason.LocalChangedRemoteRemoved,
+                            ),
+                        ),
+                    autoMergedEntries = listOf(PasswordIdentifier("proton")),
+                    summary = "1 conflict",
+                    lines = listOf("Conflict: github [Local=ALL_SETS] vs [Target=removed]"),
+                    storageSize = 4096,
+                ),
+            ),
+        )
+        var chosen: SyncConflictResolutionChoice? = null
+        var cancelled = false
+
+        composeRule.setShellContent(
+            appDialogState = { dialogState },
+            onDismissAppDialog = {
+                cancelled = true
+                dialogState = null
+            },
+            onResolveSynchronizationConflictChoice = { choice ->
+                chosen = choice
+                dialogState = null
+            },
+        )
+
+        composeRule.onNodeWithText("Resolve synchronization conflict 1/1").assertIsDisplayed()
+        composeRule.onNodeWithText("Keep target").performClick()
+
+        assertEquals(SyncConflictResolutionChoice.KeepTarget, chosen)
+        assertFalse(cancelled)
+    }
 }
 
 private fun ComposeContentTestRule.waitUntilNodeCount(
@@ -186,6 +233,7 @@ private fun ComposeContentTestRule.setShellContent(
     onStartupWarningEnabledChanged: (Boolean) -> Unit = {},
     onDismissAppDialog: () -> Unit = {},
     onConfirmAppDialog: () -> Unit = {},
+    onResolveSynchronizationConflictChoice: (SyncConflictResolutionChoice) -> Unit = {},
     onStartupWarningDismissPreferenceChanged: (Boolean) -> Unit = {},
 ) {
     setContent {
@@ -234,6 +282,7 @@ private fun ComposeContentTestRule.setShellContent(
             appDialogState = appDialogState(),
             onDismissAppDialog = onDismissAppDialog,
             onConfirmAppDialog = onConfirmAppDialog,
+            onResolveSynchronizationConflictChoice = onResolveSynchronizationConflictChoice,
             onStartupWarningDismissPreferenceChanged = onStartupWarningDismissPreferenceChanged,
         )
     }

@@ -152,6 +152,7 @@ internal fun LedgerPasswordsCompanionShell(
     appDialogState: AppDialogState?,
     onDismissAppDialog: () -> Unit,
     onConfirmAppDialog: () -> Unit,
+    onResolveSynchronizationConflictChoice: (SyncConflictResolutionChoice) -> Unit,
     onStartupWarningDismissPreferenceChanged: (Boolean) -> Unit,
 ) {
     val panel =
@@ -177,61 +178,96 @@ internal fun LedgerPasswordsCompanionShell(
     }
 
     LedgerWarmTheme {
-        appDialogState?.let { dialogState ->
-            AlertDialog(
-                onDismissRequest = {
-                    if (dialogState.dismissLabel != null) {
-                        onDismissAppDialog()
-                    }
-                },
-                title = { Text(dialogState.title) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Text(dialogState.body)
-                        if (dialogState is AppDialogState.StartupWarning) {
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .testTag(UiTags.DialogStartupDontShowAgain)
-                                        .fillMaxWidth()
-                                        .clip(MaterialTheme.shapes.small)
-                                        .clickable {
-                                            onStartupWarningDismissPreferenceChanged(!dialogState.dontShowAgain)
-                                        }
-                                        .padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+        when (val dialogState = appDialogState) {
+            is AppDialogState.ResolveSynchronizationConflict -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text(dialogState.title) },
+                    text = { Text(dialogState.body) },
+                    confirmButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    onResolveSynchronizationConflictChoice(SyncConflictResolutionChoice.KeepTarget)
+                                },
                             ) {
-                                Checkbox(
-                                    checked = dialogState.dontShowAgain,
-                                    onCheckedChange = { checked ->
-                                        onStartupWarningDismissPreferenceChanged(checked)
-                                    },
-                                )
-                                Text("Don't show on startup")
+                                Text("Keep target")
                             }
-                        }
-                    }
-                },
-                confirmButton =
-                    if (dialogState.canConfirm) {
-                        {
-                            TextButton(onClick = onConfirmAppDialog) {
-                                Text(dialogState.confirmLabel)
-                            }
-                        }
-                    } else {
-                        {}
-                    },
-                dismissButton =
-                    dialogState.dismissLabel?.let { dismissLabel ->
-                        {
-                            TextButton(onClick = onDismissAppDialog) {
-                                Text(dismissLabel)
+                            TextButton(
+                                onClick = {
+                                    onResolveSynchronizationConflictChoice(SyncConflictResolutionChoice.KeepLocal)
+                                },
+                            ) {
+                                Text("Keep local")
                             }
                         }
                     },
-            )
+                    dismissButton = {
+                        TextButton(onClick = onDismissAppDialog) {
+                            Text("Cancel sync")
+                        }
+                    },
+                )
+            }
+
+            null -> Unit
+
+            else -> {
+                AlertDialog(
+                    onDismissRequest = {
+                        if (dialogState.dismissLabel != null) {
+                            onDismissAppDialog()
+                        }
+                    },
+                    title = { Text(dialogState.title) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Text(dialogState.body)
+                            if (dialogState is AppDialogState.StartupWarning) {
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .testTag(UiTags.DialogStartupDontShowAgain)
+                                            .fillMaxWidth()
+                                            .clip(MaterialTheme.shapes.small)
+                                            .clickable {
+                                                onStartupWarningDismissPreferenceChanged(!dialogState.dontShowAgain)
+                                            }
+                                            .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Checkbox(
+                                        checked = dialogState.dontShowAgain,
+                                        onCheckedChange = { checked ->
+                                            onStartupWarningDismissPreferenceChanged(checked)
+                                        },
+                                    )
+                                    Text("Don't show on startup")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton =
+                        if (dialogState.canConfirm) {
+                            {
+                                TextButton(onClick = onConfirmAppDialog) {
+                                    Text(dialogState.confirmLabel)
+                                }
+                            }
+                        } else {
+                            {}
+                        },
+                    dismissButton =
+                        dialogState.dismissLabel?.let { dismissLabel ->
+                            {
+                                TextButton(onClick = onDismissAppDialog) {
+                                    Text(dismissLabel)
+                                }
+                            }
+                        },
+                )
+            }
         }
 
         Box(

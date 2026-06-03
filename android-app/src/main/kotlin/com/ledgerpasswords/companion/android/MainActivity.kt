@@ -66,7 +66,8 @@ import com.ledgerpasswords.companion.core.risk.PushRiskDecision
 import com.ledgerpasswords.companion.core.risk.PushRiskFinding
 import com.ledgerpasswords.companion.core.risk.PushRiskSeverity
 import com.ledgerpasswords.companion.core.risk.PushSafetyMode
-import com.ledgerpasswords.companion.core.sync.VaultMergePlan
+import com.ledgerpasswords.companion.core.sync.ThreeWayVaultMergePlan
+import com.ledgerpasswords.companion.core.sync.ThreeWayVaultMergePlanner
 import com.ledgerpasswords.companion.core.sync.VaultMergePlanner
 import com.ledgerpasswords.companion.core.validation.ValidationResult
 import com.ledgerpasswords.companion.core.validation.VaultValidator
@@ -93,6 +94,7 @@ class MainActivity : ComponentActivity() {
     private val metadataCodec = MetadataCodec()
     private val differ = VaultDiffer()
     private val mergePlanner = VaultMergePlanner()
+    private val threeWayMergePlanner = ThreeWayVaultMergePlanner()
 
     private val importBackupLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -281,6 +283,9 @@ class MainActivity : ComponentActivity() {
                 appDialogState = appDialogState,
                 onDismissAppDialog = { dismissAppDialog() },
                 onConfirmAppDialog = { confirmAppDialog() },
+                onResolveSynchronizationConflictChoice = { choice ->
+                    resolveSynchronizationConflict(choice)
+                },
                 onStartupWarningDismissPreferenceChanged = { checked ->
                     updateStartupWarningDialogPreference(checked)
                 },
@@ -438,7 +443,7 @@ class MainActivity : ComponentActivity() {
 
     private fun buildSynchronizationPrompt(
         target: SyncTarget,
-        plan: VaultMergePlan,
+        summary: String,
         mergedVault: Vault,
         assessment: LedgerPushRiskAssessment,
     ): DeferredSynchronizationPrompt {
@@ -453,7 +458,7 @@ class MainActivity : ComponentActivity() {
                 append("Merged result: ${mergedVault.entries.size} identifier")
                 if (mergedVault.entries.size > 1) append('s')
                 append(". ")
-                append(renderSynchronizationSummary(plan))
+                append(summary)
                 append("\n\n")
                 append(
                     target.userActionMessage(
@@ -478,6 +483,21 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun matchingSyncShadow(
+        target: SyncTarget,
+        storageSize: Int,
+    ): SyncShadowState? {
+        val shadow = syncShadowState ?: return null
+        if (shadow.targetKind != syncTargetKind(target) || shadow.storageSize != storageSize) {
+            return null
+        }
+        return when (target) {
+            is SyncTarget.Usb -> shadow
+            is SyncTarget.Speculos ->
+                shadow.takeIf { it.targetDescriptor == syncTargetDescriptor(target) }
+        }
+    }
+
     private fun buildSyncShadowState(
         target: SyncTarget,
         vault: Vault,
@@ -485,19 +505,23 @@ class MainActivity : ComponentActivity() {
     ): SyncShadowState =
         SyncShadowState(
             lastSyncedVault = vault.copy(source = VaultSource.Local).sortedByNickname(),
-            targetKind =
-                when (target) {
-                    is SyncTarget.Usb -> SyncTargetKind.Usb
-                    is SyncTarget.Speculos -> SyncTargetKind.Speculos
-                },
-            targetDescriptor =
-                when (target) {
-                    is SyncTarget.Usb -> target.device.deviceName
-                    is SyncTarget.Speculos -> "${target.host}:${target.port}"
-                },
+            targetKind = syncTargetKind(target),
+            targetDescriptor = syncTargetDescriptor(target),
             storageSize = storageSize,
             updatedAtEpochMillis = Instant.now().toEpochMilli(),
         )
+
+    private fun syncTargetKind(target: SyncTarget): SyncTargetKind =
+        when (target) {
+            is SyncTarget.Usb -> SyncTargetKind.Usb
+            is SyncTarget.Speculos -> SyncTargetKind.Speculos
+        }
+
+    private fun syncTargetDescriptor(target: SyncTarget): String? =
+        when (target) {
+            is SyncTarget.Usb -> null
+            is SyncTarget.Speculos -> "${target.host}:${target.port}"
+        }
 
     private fun buildPushConfirmationDialogState(): PushConfirmationDialogState {
         val assessment = assessLocalPushRisk(localVault, effectiveStorageSize(), PushSafetyMode.HardwareSafe)
@@ -569,6 +593,15 @@ class MainActivity : ComponentActivity() {
                     )
             }
 
+            is AppDialogState.ResolveSynchronizationConflict -> {
+                syncUiState =
+                    syncUiState.copy(
+                        status = SyncStatus.CancelledByUser,
+                        statusMessage = "Synchronization cancelled during conflict resolution. No write was performed.",
+                        showVerifyCallToAction = false,
+                    )
+            }
+
             else -> Unit
         }
         appDialogState = null
@@ -622,6 +655,8 @@ class MainActivity : ComponentActivity() {
                 appDialogState = null
                 executeSynchronization(dialog)
             }
+
+            is AppDialogState.ResolveSynchronizationConflict -> Unit
 
             null -> Unit
         }
@@ -1140,6 +1175,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
             val config = client.getAppConfig()
+            val shadow = matchingSyncShadow(target, config.storageSize)
             updateSyncStateFromWorker(
                 SyncUpdate(
                     status = SyncStatus.Dumping,
@@ -1151,39 +1187,90 @@ class MainActivity : ComponentActivity() {
                 ),
             )
             val deviceVault = metadataCodec.decode(client.dumpMetadatas(config.storageSize)).vault.copy(source = VaultSource.LedgerDevice).sortedByNickname()
-            val plan = mergePlanner.plan(localSnapshot, deviceVault)
-            val summary = renderSynchronizationSummary(plan)
-            val lines = renderSynchronizationLines(plan)
+            val summary: String
+            val lines: List<String>
+            val mergedVault: Vault
 
-            if (!plan.hasChanges) {
-                return@performLedgerAction SyncUpdate(
-                    status = SyncStatus.Success,
-                    statusMessage = "Local and target are already synchronized.",
-                    appName = info.name,
-                    appVersion = info.version,
-                    storageSize = config.storageSize,
-                    deviceEntries = deviceVault.entries.size,
-                    diffSummary = summary,
-                    diffLines = lines,
-                    showVerifyCallToAction = false,
-                )
+            if (shadow != null) {
+                val plan = threeWayMergePlanner.plan(shadow.lastSyncedVault, localSnapshot, deviceVault)
+                summary = renderThreeWaySynchronizationSummary(plan)
+                lines = renderThreeWaySynchronizationLines(plan)
+
+                if (!plan.hasChanges) {
+                    return@performLedgerAction SyncUpdate(
+                        status = SyncStatus.Success,
+                        statusMessage = "Local and target already match the sync shadow.",
+                        appName = info.name,
+                        appVersion = info.version,
+                        storageSize = config.storageSize,
+                        deviceEntries = deviceVault.entries.size,
+                        diffSummary = summary,
+                        diffLines = lines,
+                        replaceSyncShadow = buildSyncShadowState(target, localSnapshot, config.storageSize),
+                        showVerifyCallToAction = false,
+                    )
+                }
+
+                if (!plan.canMerge) {
+                    return@performLedgerAction SyncUpdate(
+                        status = SyncStatus.ValidationError,
+                        statusMessage = "Synchronization requires conflict resolution before any write.",
+                        appName = info.name,
+                        appVersion = info.version,
+                        storageSize = config.storageSize,
+                        deviceEntries = deviceVault.entries.size,
+                        diffSummary = summary,
+                        diffLines = lines,
+                        deferredSynchronizationConflictPrompt =
+                            DeferredSynchronizationConflictPrompt(
+                                pendingConflicts = plan.conflicts,
+                                autoMergedEntries = buildAutomaticMergedEntries(plan),
+                                summary = summary,
+                                lines = lines,
+                                storageSize = config.storageSize,
+                            ),
+                        showVerifyCallToAction = false,
+                    )
+                }
+
+                mergedVault = requireNotNull(plan.mergedVault)
+            } else {
+                val plan = mergePlanner.plan(localSnapshot, deviceVault)
+                summary = renderSynchronizationSummary(plan)
+                lines = renderSynchronizationLines(plan)
+
+                if (!plan.hasChanges) {
+                    return@performLedgerAction SyncUpdate(
+                        status = SyncStatus.Success,
+                        statusMessage = "Local and target are already synchronized.",
+                        appName = info.name,
+                        appVersion = info.version,
+                        storageSize = config.storageSize,
+                        deviceEntries = deviceVault.entries.size,
+                        diffSummary = summary,
+                        diffLines = lines,
+                        replaceSyncShadow = buildSyncShadowState(target, localSnapshot, config.storageSize),
+                        showVerifyCallToAction = false,
+                    )
+                }
+
+                if (!plan.canMerge) {
+                    return@performLedgerAction SyncUpdate(
+                        status = SyncStatus.ValidationError,
+                        statusMessage = "Synchronization blocked: resolve the listed conflict(s) manually before writing.",
+                        appName = info.name,
+                        appVersion = info.version,
+                        storageSize = config.storageSize,
+                        deviceEntries = deviceVault.entries.size,
+                        diffSummary = summary,
+                        diffLines = lines,
+                        showVerifyCallToAction = false,
+                    )
+                }
+
+                mergedVault = requireNotNull(plan.mergedVault)
             }
 
-            if (!plan.canMerge) {
-                return@performLedgerAction SyncUpdate(
-                    status = SyncStatus.ValidationError,
-                    statusMessage = "Synchronization blocked: resolve the listed conflict(s) manually before writing.",
-                    appName = info.name,
-                    appVersion = info.version,
-                    storageSize = config.storageSize,
-                    deviceEntries = deviceVault.entries.size,
-                    diffSummary = summary,
-                    diffLines = lines,
-                    showVerifyCallToAction = false,
-                )
-            }
-
-            val mergedVault = requireNotNull(plan.mergedVault)
             val assessment = assessMergedPushRisk(mergedVault, config.storageSize, target.pushSafetyMode())
             if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
                 return@performLedgerAction SyncUpdate(
@@ -1223,10 +1310,104 @@ class MainActivity : ComponentActivity() {
                 deviceEntries = deviceVault.entries.size,
                 diffSummary = summary,
                 diffLines = lines,
-                deferredSynchronizationPrompt = buildSynchronizationPrompt(target, plan, mergedVault, assessment),
+                deferredSynchronizationPrompt = buildSynchronizationPrompt(target, summary, mergedVault, assessment),
                 showVerifyCallToAction = false,
             )
         }
+    }
+
+    private fun buildAutomaticMergedEntries(plan: ThreeWayVaultMergePlan): List<PasswordIdentifier> =
+        buildList {
+            addAll(plan.localAdditions)
+            addAll(plan.remoteAdditions)
+            addAll(plan.localUpdates.map { it.after })
+            addAll(plan.remoteUpdates.map { it.after })
+            addAll(plan.convergedUpdates.map { it.after })
+            addAll(plan.unchanged)
+        }.sortedBy { it.nickname.lowercase() }
+
+    private fun resolveSynchronizationConflict(choice: SyncConflictResolutionChoice) {
+        val dialog = appDialogState as? AppDialogState.ResolveSynchronizationConflict ?: return
+        val currentConflict = dialog.state.currentConflict ?: return
+        val resolvedEntry =
+            when (choice) {
+                SyncConflictResolutionChoice.KeepLocal -> currentConflict.localEntry
+                SyncConflictResolutionChoice.KeepTarget -> currentConflict.remoteEntry
+            }
+        val nextState =
+            dialog.state.copy(
+                pendingConflicts = dialog.state.pendingConflicts.drop(1),
+                chosenEntries = dialog.state.chosenEntries + listOfNotNull(resolvedEntry),
+                chosenNotes = dialog.state.chosenNotes + renderThreeWayConflictResolutionLine(currentConflict, choice),
+            )
+        if (nextState.pendingConflicts.isNotEmpty()) {
+            appDialogState = dialog.copy(state = nextState)
+            syncUiState =
+                syncUiState.copy(
+                    status = SyncStatus.ValidationError,
+                    statusMessage =
+                        "Conflict ${nextState.resolvedCount + 1}/${nextState.totalConflictCount} ready for resolution.",
+                    diffSummary = nextState.summary,
+                    diffLines = nextState.lines,
+                    showVerifyCallToAction = false,
+                )
+            return
+        }
+
+        appDialogState = null
+        finalizeResolvedSynchronization(nextState)
+    }
+
+    private fun finalizeResolvedSynchronization(state: DeferredSynchronizationConflictPrompt) {
+        val target = requireCurrentTarget() ?: return
+        val mergedVault =
+            Vault(
+                entries = state.autoMergedEntries + state.chosenEntries,
+                source = VaultSource.Local,
+            ).sortedByNickname()
+        val assessment = assessMergedPushRisk(mergedVault, state.storageSize, target.pushSafetyMode())
+        if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
+            syncUiState =
+                syncUiState.copy(
+                    status = SyncStatus.ValidationError,
+                    statusMessage =
+                        assessment.summaryLines().joinToString(separator = "\n") +
+                            "\nSynchronization stopped before writing. Open Debug to enable the dangerous override if you really want to force the merged hardware write.",
+                    diffSummary = renderResolvedSynchronizationSummary(state),
+                    diffLines = renderResolvedSynchronizationLines(state),
+                    showVerifyCallToAction = false,
+                )
+            return
+        }
+        if (!assessment.validation.isValid) {
+            syncUiState =
+                syncUiState.copy(
+                    status = SyncStatus.ValidationError,
+                    statusMessage = assessment.validation.toUserMessage(),
+                    diffSummary = renderResolvedSynchronizationSummary(state),
+                    diffLines = renderResolvedSynchronizationLines(state),
+                    showVerifyCallToAction = false,
+                )
+            return
+        }
+
+        val prompt = buildSynchronizationPrompt(target, renderResolvedSynchronizationSummary(state), mergedVault, assessment)
+        syncUiState =
+            syncUiState.copy(
+                status = SyncStatus.Success,
+                statusMessage = "All synchronization conflicts resolved. Review the merged write and confirm.",
+                diffSummary = renderResolvedSynchronizationSummary(state),
+                diffLines = renderResolvedSynchronizationLines(state),
+                showVerifyCallToAction = false,
+            )
+        appDialogState =
+            AppDialogState.ConfirmSynchronization(
+                title = prompt.title,
+                body = prompt.body,
+                confirmLabel = prompt.confirmLabel,
+                cancelMessage = prompt.cancelMessage,
+                mergedVault = mergedVault,
+            )
     }
 
     private fun executeSynchronization(dialog: AppDialogState.ConfirmSynchronization) {
@@ -1614,15 +1795,19 @@ class MainActivity : ComponentActivity() {
         runOnUiThread {
             var statusMessage = update.statusMessage
             var localPersistenceSucceeded = true
-            update.deferredSynchronizationPrompt?.let { prompt ->
-                appDialogState =
-                    AppDialogState.ConfirmSynchronization(
-                        title = prompt.title,
-                        body = prompt.body,
-                        confirmLabel = prompt.confirmLabel,
-                        cancelMessage = prompt.cancelMessage,
-                        mergedVault = prompt.mergedVault,
-                    )
+            if (update.deferredSynchronizationConflictPrompt != null) {
+                appDialogState = AppDialogState.ResolveSynchronizationConflict(update.deferredSynchronizationConflictPrompt)
+            } else {
+                update.deferredSynchronizationPrompt?.let { prompt ->
+                    appDialogState =
+                        AppDialogState.ConfirmSynchronization(
+                            title = prompt.title,
+                            body = prompt.body,
+                            confirmLabel = prompt.confirmLabel,
+                            cancelMessage = prompt.cancelMessage,
+                            mergedVault = prompt.mergedVault,
+                        )
+                }
             }
             update.replaceLocalVault?.let { replacement ->
                 val prompt = update.deferredLocalReplacementPrompt
@@ -1818,7 +2003,46 @@ internal sealed interface AppDialogState {
         override val canConfirm: Boolean = true
         override val dismissLabel: String = "Cancel"
     }
+
+    data class ResolveSynchronizationConflict(
+        val state: DeferredSynchronizationConflictPrompt,
+    ) : AppDialogState {
+        override val title: String
+            get() = "Resolve synchronization conflict ${state.resolvedCount + 1}/${state.totalConflictCount}"
+        override val body: String
+            get() =
+                buildString {
+                    val conflict = state.currentConflict
+                    if (conflict != null) {
+                        append("Choose which side should win for ")
+                        append(conflict.nickname)
+                        append(".\n\n")
+                        append(renderConflictResolutionSide("Local", conflict.localEntry))
+                        append('\n')
+                        append(renderConflictResolutionSide("Target", conflict.remoteEntry))
+                    }
+                    if (state.chosenNotes.isNotEmpty()) {
+                        append("\n\nResolved so far:")
+                        state.chosenNotes.forEach { line ->
+                            append("\n")
+                            append(line)
+                        }
+                    }
+                }
+        override val canConfirm: Boolean = false
+        override val confirmLabel: String = "Keep local"
+        override val dismissLabel: String? = null
+    }
 }
+
+private fun renderConflictResolutionSide(
+    label: String,
+    entry: PasswordIdentifier?,
+): String =
+    when (entry) {
+        null -> "$label: removed"
+        else -> "$label: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]"
+    }
 
 internal data class EntryEditorState(
     val originalNickname: String? = null,
