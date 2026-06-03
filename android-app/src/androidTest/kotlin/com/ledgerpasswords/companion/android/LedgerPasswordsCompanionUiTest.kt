@@ -16,6 +16,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ledgerpasswords.companion.android.storage.SyncShadowState
+import com.ledgerpasswords.companion.android.storage.SyncTargetKind
+import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.sync.ThreeWayConflictReason
@@ -77,7 +80,7 @@ class LedgerPasswordsCompanionUiTest {
     }
 
     @Test
-    fun syncScreenDisplaysDiffBeforeWriteSectionAndVerifyCallToAction() {
+    fun syncScreenShowsOnlySynchronizeAndCurrentStateForDailyUse() {
         composeRule.setShellContent(
             showSyncScreen = true,
             syncUiState =
@@ -100,16 +103,41 @@ class LedgerPasswordsCompanionUiTest {
         composeRule.onNodeWithTag(UiTags.SyncScroll)
             .performScrollToNode(hasTestTag(UiTags.SyncSynchronize))
         composeRule.onNodeWithTag(UiTags.SyncSynchronize).assertIsDisplayed()
+        composeRule.onNodeWithText("Synchronize").assertIsDisplayed()
+        composeRule.onNodeWithText("Current state").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTags.SyncScroll)
             .performScrollToNode(hasText("Verify now"))
         composeRule.onNodeWithText("Verify now").assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTags.SyncScroll)
-            .performScrollToNode(hasTestTag(UiTags.SyncDiffSection))
+        composeRule.onNodeWithText("Latest sync result: 1 addition").assertIsDisplayed()
+        composeRule.onNodeWithText("Export local to Ledger").assertDoesNotExist()
+        composeRule.onNodeWithText("Advanced: read & compare").assertDoesNotExist()
+        composeRule.onNodeWithText("Advanced: write & final check").assertDoesNotExist()
+    }
 
-        composeRule.onNodeWithTag(UiTags.SyncDiffSection).assertIsDisplayed()
-        composeRule.onNodeWithTag(UiTags.SyncScroll)
-            .performScrollToNode(hasText("Export local to Ledger"))
-        composeRule.onNodeWithText("Export local to Ledger").assertIsDisplayed()
+    @Test
+    fun homeScreenShowsLastSyncAndHighlightsNewLocalEntries() {
+        composeRule.setShellContent(
+            localVault =
+                Vault(
+                    entries = listOf(
+                        PasswordIdentifier("github"),
+                        PasswordIdentifier("proton", CharsetPolicy.fromCli("upper,lower,numbers")),
+                    ),
+                ),
+            syncShadowState =
+                SyncShadowState(
+                    lastSyncedVault = Vault(entries = listOf(PasswordIdentifier("github"))),
+                    targetKind = SyncTargetKind.Usb,
+                    targetDescriptor = null,
+                    storageSize = 4096,
+                    updatedAtEpochMillis = 1_717_440_000_000L,
+                ),
+        )
+
+        composeRule.onNodeWithText("Last sync:", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("1 local change waiting to be synchronized.").assertIsDisplayed()
+        composeRule.onNodeWithText("Synchronize now").assertIsDisplayed()
+        composeRule.onNodeWithText("New locally").assertIsDisplayed()
     }
 
     @Test
@@ -130,6 +158,51 @@ class LedgerPasswordsCompanionUiTest {
 
         composeRule.waitUntilNodeCount("Delete this identifier?", expectedCount = 0)
         assertTrue(confirmed)
+    }
+
+    @Test
+    fun guidedSynchronizationDialogShowsProgressStepAndFinalCloseAction() {
+        var dialogState by mutableStateOf<AppDialogState?>(
+            AppDialogState.SyncFlow(
+                SyncFlowDialogState(
+                    stepIndex = 3,
+                    stepCount = 4,
+                    stepLabel = "Write merged identifiers",
+                    title = "Approve the write",
+                    body = "Approve the write on your Ledger. The merged identifier list will be saved to the device.",
+                ),
+            ),
+        )
+        var closed = false
+
+        composeRule.setShellContent(
+            appDialogState = { dialogState },
+            onConfirmAppDialog = {
+                closed = true
+                dialogState = null
+            },
+        )
+
+        composeRule.onNodeWithText("Approve the write").assertIsDisplayed()
+        composeRule.onNodeWithText("Step 3/4 • Write merged identifiers").assertIsDisplayed()
+        composeRule.onNodeWithText("Close").assertDoesNotExist()
+
+        dialogState =
+            AppDialogState.SyncFlow(
+                SyncFlowDialogState(
+                    stepIndex = 4,
+                    stepCount = 4,
+                    stepLabel = "Finished",
+                    title = "Synchronization complete",
+                    body = "Local vault and Ledger now share the merged vault.",
+                    allowClose = true,
+                ),
+            )
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Synchronization complete").assertIsDisplayed()
+        composeRule.onNodeWithText("Close").performClick()
+
+        assertTrue(closed)
     }
 
     @Test
@@ -197,6 +270,7 @@ private fun ComposeContentTestRule.setShellContent(
     showDebugScreen: Boolean = false,
     entryEditorState: EntryEditorState? = null,
     syncUiState: SyncUiState = SyncUiState(),
+    syncShadowState: SyncShadowState? = null,
     transportMode: SyncTransportMode = SyncTransportMode.Usb,
     speculosHost: String = "10.0.2.2",
     speculosPortText: String = "10100",
@@ -246,6 +320,7 @@ private fun ComposeContentTestRule.setShellContent(
             showDebugScreen = showDebugScreen,
             entryEditorState = entryEditorState,
             syncUiState = syncUiState,
+            syncShadowState = syncShadowState,
             transportMode = transportMode,
             speculosHost = speculosHost,
             speculosPortText = speculosPortText,

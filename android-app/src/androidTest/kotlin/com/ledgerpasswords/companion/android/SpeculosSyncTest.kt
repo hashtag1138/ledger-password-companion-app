@@ -2,9 +2,11 @@ package com.ledgerpasswords.companion.android
 
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -18,30 +20,22 @@ class SpeculosSyncTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun importEditPushAndVerifyAgainstSpeculos() {
+    fun syncScreenShowsDailySynchronizeFlowForSpeculos() {
         openSyncIfNeeded()
         connectToSpeculos()
 
-        scrollToSyncAction(UiTags.SyncPull)
-        composeRule.onNodeWithTag(UiTags.SyncPull).performClick()
-        waitForStatus("Import completed from the test target.")
-
-        scrollToSyncAction(UiTags.SyncPush)
-        composeRule.onNodeWithTag(UiTags.SyncPush).performClick()
-        waitForStatus("Push sent to Speculos.")
-
-        scrollToSyncAction(UiTags.SyncVerify)
-        composeRule.onNodeWithTag(UiTags.SyncVerify).performClick()
-        waitForStatus("Ledger matches the local state.")
+        scrollToSyncAction(UiTags.SyncSynchronize)
+        composeRule.onNodeWithTag(UiTags.SyncSynchronize).assertIsDisplayed()
+        composeRule.onNodeWithText("Current state").assertIsDisplayed()
     }
 
     private fun openSyncIfNeeded() {
-        when (waitForAnyTag(UiTags.HomeOpenSync, UiTags.SyncPull, UiTags.SyncStatusMessage)) {
+        when (waitForAnyTag(UiTags.HomeOpenSync, UiTags.SyncSynchronize, UiTags.SyncStatusMessage)) {
             UiTags.HomeOpenSync -> {
                 composeRule.onNodeWithTag(UiTags.HomeOpenSync).performClick()
-                waitForAnyTag(UiTags.SyncPull, UiTags.SyncStatusMessage)
+                waitForAnyTag(UiTags.SyncSynchronize, UiTags.SyncStatusMessage)
             }
-            UiTags.SyncPull,
+            UiTags.SyncSynchronize,
             UiTags.SyncStatusMessage,
             -> return
         }

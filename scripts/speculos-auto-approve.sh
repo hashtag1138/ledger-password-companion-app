@@ -157,10 +157,12 @@ echo "Auto-approving Passwords prompts on ${SERVER}:${API_PORT}"
 last_screen=""
 while true; do
     text="$(current_screen_text 2>/dev/null || true)"
-    if [[ -n "$text" && "$text" != "$last_screen" ]]; then
+    if [[ -z "$text" ]]; then
+        last_screen=""
+    elif [[ "$text" != "$last_screen" ]]; then
         if [[ "$text" == *"Approve"* ]]; then
             press_button both
-        elif [[ "$text" == *"Transfer metadatas"* || "$text" == *"Overwrite metadatas"* ]]; then
+        elif [[ "$text" == *"Refuse"* || "$text" == *"Transfer metadatas"* || "$text" == *"Overwrite metadatas"* ]]; then
             press_button right
         fi
         last_screen="$text"

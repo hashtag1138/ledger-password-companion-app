@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
     private var appDialogState by mutableStateOf<AppDialogState?>(null)
     private var hardwareDangerousOverrideEnabled by mutableStateOf(false)
     private var syncShadowState by mutableStateOf<SyncShadowState?>(null)
+    private var guidedSynchronizationActive by mutableStateOf(false)
 
     private val usbReceiver =
         object : BroadcastReceiver() {
@@ -213,6 +214,7 @@ class MainActivity : ComponentActivity() {
                 showDebugScreen = showDebugScreen,
                 entryEditorState = entryEditorState,
                 syncUiState = syncUiState,
+                syncShadowState = syncShadowState,
                 transportMode = selectedTransportMode,
                 speculosHost = speculosHost,
                 speculosPortText = speculosPortText,
@@ -443,48 +445,6 @@ class MainActivity : ComponentActivity() {
         mode: PushSafetyMode,
     ): LedgerPushRiskAssessment = LedgerPushRiskPolicy(storageSize).assess(vault.copy(source = VaultSource.Local).sortedByNickname(), mode)
 
-    private fun buildSynchronizationPrompt(
-        target: SyncTarget,
-        summary: String,
-        mergedVault: Vault,
-        assessment: LedgerPushRiskAssessment,
-    ): DeferredSynchronizationPrompt {
-        val dangerousHardwareWrite =
-            target is SyncTarget.Usb &&
-                assessment.decision == PushRiskDecision.Block &&
-                hardwareDangerousOverrideEnabled
-        val title = if (dangerousHardwareWrite) "Confirm dangerous synchronization" else "Confirm synchronization"
-        val confirmLabel = if (dangerousHardwareWrite) "Force sync" else "Synchronize"
-        val body =
-            buildString {
-                append("Merged result: ${mergedVault.entries.size} identifier")
-                if (mergedVault.entries.size > 1) append('s')
-                append(". ")
-                append(summary)
-                append("\n\n")
-                append(
-                    target.userActionMessage(
-                        "The companion will write the merged vault to the Ledger, verify the result, then replace the local vault on the phone.",
-                        "The companion will write the merged vault to Speculos, verify the result, then replace the local vault on the phone.",
-                    ),
-                )
-                if (assessment.decision == PushRiskDecision.Warn || dangerousHardwareWrite) {
-                    append("\n\n")
-                    append(assessment.summaryLines().joinToString(separator = "\n"))
-                    if (dangerousHardwareWrite) {
-                        append("\n\nThe dangerous override is enabled in Debug, so the hardware-safe block can be bypassed for this write.")
-                    }
-                }
-            }
-        return DeferredSynchronizationPrompt(
-            title = title,
-            body = body,
-            confirmLabel = confirmLabel,
-            cancelMessage = "Synchronization cancelled. No write was performed.",
-            mergedVault = mergedVault,
-        )
-    }
-
     private fun matchingSyncShadow(
         target: SyncTarget,
         storageSize: Int,
@@ -587,21 +547,20 @@ class MainActivity : ComponentActivity() {
                     )
             }
 
-            is AppDialogState.ConfirmSynchronization -> {
-                syncUiState =
-                    syncUiState.copy(
-                        status = SyncStatus.CancelledByUser,
-                        statusMessage = dialog.cancelMessage,
-                    )
-            }
-
             is AppDialogState.ResolveSynchronizationConflict -> {
+                guidedSynchronizationActive = false
                 syncUiState =
                     syncUiState.copy(
                         status = SyncStatus.CancelledByUser,
                         statusMessage = "Synchronization cancelled during conflict resolution. No write was performed.",
                         showVerifyCallToAction = false,
                     )
+            }
+
+            is AppDialogState.SyncFlow -> {
+                if (dialog.canConfirm) {
+                    guidedSynchronizationActive = false
+                }
             }
 
             else -> Unit
@@ -653,12 +612,12 @@ class MainActivity : ComponentActivity() {
                     )
             }
 
-            is AppDialogState.ConfirmSynchronization -> {
-                appDialogState = null
-                executeSynchronization(dialog)
-            }
-
             is AppDialogState.ResolveSynchronizationConflict -> Unit
+
+            is AppDialogState.SyncFlow -> {
+                guidedSynchronizationActive = false
+                appDialogState = null
+            }
 
             null -> Unit
         }
@@ -1157,6 +1116,7 @@ class MainActivity : ComponentActivity() {
         val target = requireCurrentTarget() ?: return
         val localSnapshot = localVault.copy(source = VaultSource.Local).sortedByNickname()
         DiagnosticLogStore.mark("synchronizeVaults target=${target.label} localEntries=${localSnapshot.entries.size}")
+        beginGuidedSynchronization(target)
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.WaitingForLedgerApproval,
@@ -1185,6 +1145,7 @@ class MainActivity : ComponentActivity() {
                     appName = info.name,
                     appVersion = info.version,
                     storageSize = config.storageSize,
+                    syncFlowDialog = buildPrepareMergeDialog(target),
                     showVerifyCallToAction = false,
                 ),
             )
@@ -1356,7 +1317,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun finalizeResolvedSynchronization(state: DeferredSynchronizationConflictPrompt) {
-        val target = requireCurrentTarget() ?: return
+        val target =
+            requireCurrentTarget() ?: run {
+                presentGuidedSynchronizationCompletion(
+                    status = syncUiState.status,
+                    statusMessage = syncUiState.statusMessage,
+                    diffSummary = syncUiState.diffSummary,
+                )
+                return
+            }
         val mergedVault =
             Vault(
                 entries = state.autoMergedEntries + state.chosenEntries,
@@ -1374,6 +1343,11 @@ class MainActivity : ComponentActivity() {
                     diffLines = renderResolvedSynchronizationLines(state),
                     showVerifyCallToAction = false,
                 )
+            presentGuidedSynchronizationCompletion(
+                status = SyncStatus.ValidationError,
+                statusMessage = syncUiState.statusMessage,
+                diffSummary = syncUiState.diffSummary,
+            )
             return
         }
         if (!assessment.validation.isValid) {
@@ -1385,6 +1359,11 @@ class MainActivity : ComponentActivity() {
                     diffLines = renderResolvedSynchronizationLines(state),
                     showVerifyCallToAction = false,
                 )
+            presentGuidedSynchronizationCompletion(
+                status = SyncStatus.ValidationError,
+                statusMessage = syncUiState.statusMessage,
+                diffSummary = syncUiState.diffSummary,
+            )
             return
         }
 
@@ -1396,17 +1375,23 @@ class MainActivity : ComponentActivity() {
                 diffLines = renderResolvedSynchronizationLines(state),
                 showVerifyCallToAction = false,
             )
+        presentGuidedSynchronizationDialog(buildWriteDialog(target))
         executeSynchronization(mergedVault)
     }
 
-    private fun executeSynchronization(dialog: AppDialogState.ConfirmSynchronization) {
-        executeSynchronization(dialog.mergedVault)
-    }
-
     private fun executeSynchronization(mergedVault: Vault) {
-        val target = requireCurrentTarget() ?: return
+        val target =
+            requireCurrentTarget() ?: run {
+                presentGuidedSynchronizationCompletion(
+                    status = syncUiState.status,
+                    statusMessage = syncUiState.statusMessage,
+                    diffSummary = syncUiState.diffSummary,
+                )
+                return
+            }
         val normalizedMergedVault = mergedVault.copy(source = VaultSource.Local).sortedByNickname()
         DiagnosticLogStore.mark("executeSynchronization target=${target.label} mergedEntries=${normalizedMergedVault.entries.size}")
+        presentGuidedSynchronizationDialog(buildWriteDialog(target))
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.Loading,
@@ -1490,12 +1475,13 @@ class MainActivity : ComponentActivity() {
                 status = SyncStatus.Loading,
                 statusMessage =
                     target.userActionMessage(
-                        "Merged vault ready. Writing to the Ledger...",
-                        "Merged vault ready. Writing to Speculos...",
+                        "Approve the write on your Ledger. The merged identifier list will replace the current list on the device.",
+                        "Writing the merged identifier list to Speculos...",
                     ),
                 appName = info.name,
                 appVersion = info.version,
                 storageSize = config.storageSize,
+                syncFlowDialog = buildWriteDialog(target),
                 showVerifyCallToAction = false,
             ),
         )
@@ -1505,10 +1491,15 @@ class MainActivity : ComponentActivity() {
         updateSyncStateFromWorker(
             SyncUpdate(
                 status = SyncStatus.Verifying,
-                statusMessage = target.userActionMessage("Write completed. Verifying Ledger...", "Write completed. Verifying Speculos..."),
+                statusMessage =
+                    target.userActionMessage(
+                        "Approve the final read on your Ledger. This confirms the device now matches the merged result.",
+                        "Reading back Speculos to verify the merged identifiers...",
+                    ),
                 appName = info.name,
                 appVersion = info.version,
                 storageSize = config.storageSize,
+                syncFlowDialog = buildVerifyDialog(target),
                 showVerifyCallToAction = false,
             ),
         )
@@ -1760,6 +1751,115 @@ class MainActivity : ComponentActivity() {
         return SpeculosEndpoint(host = host, port = port)
     }
 
+    private fun beginGuidedSynchronization(target: SyncTarget) {
+        guidedSynchronizationActive = true
+        appDialogState = AppDialogState.SyncFlow(buildReadDialog(target))
+    }
+
+    private fun presentGuidedSynchronizationDialog(dialog: SyncFlowDialogState) {
+        if (!guidedSynchronizationActive) return
+        appDialogState = AppDialogState.SyncFlow(dialog)
+    }
+
+    private fun presentGuidedSynchronizationCompletion(
+        status: SyncStatus,
+        statusMessage: String,
+        diffSummary: String? = null,
+    ) {
+        if (!guidedSynchronizationActive) return
+        appDialogState =
+            AppDialogState.SyncFlow(
+                buildGuidedSynchronizationOutcomeDialog(
+                    SyncUpdate(
+                        status = status,
+                        statusMessage = statusMessage,
+                        diffSummary = diffSummary,
+                    ),
+                ),
+            )
+        guidedSynchronizationActive = false
+    }
+
+    private fun buildReadDialog(target: SyncTarget): SyncFlowDialogState =
+        SyncFlowDialogState(
+            stepIndex = 1,
+            stepCount = 4,
+            stepLabel = "Read from target",
+            title = "Approve the initial read",
+            body =
+                target.userActionMessage(
+                    "Approve the read on your Ledger. The phone only reads identifier metadata so it can compare local and device state.",
+                    "Reading identifiers from Speculos to prepare synchronization.",
+                ),
+        )
+
+    private fun buildPrepareMergeDialog(target: SyncTarget): SyncFlowDialogState =
+        SyncFlowDialogState(
+            stepIndex = 2,
+            stepCount = 4,
+            stepLabel = "Prepare merge",
+            title = "Preparing the merged state",
+            body =
+                target.userActionMessage(
+                    "Comparing the local vault with the identifiers read from your Ledger.",
+                    "Comparing the local vault with the identifiers read from Speculos.",
+                ),
+        )
+
+    private fun buildWriteDialog(target: SyncTarget): SyncFlowDialogState =
+        SyncFlowDialogState(
+            stepIndex = 3,
+            stepCount = 4,
+            stepLabel = "Write merged identifiers",
+            title = "Approve the write",
+            body =
+                target.userActionMessage(
+                    "Approve the write on your Ledger. The merged identifier list will be saved to the device.",
+                    "Writing the merged identifier list to Speculos.",
+                ),
+        )
+
+    private fun buildVerifyDialog(target: SyncTarget): SyncFlowDialogState =
+        SyncFlowDialogState(
+            stepIndex = 4,
+            stepCount = 4,
+            stepLabel = "Verify final state",
+            title = "Approve the verification read",
+            body =
+                target.userActionMessage(
+                    "Approve the final read on your Ledger. This confirms the device now matches the merged result.",
+                    "Reading back Speculos to verify the merged identifier list.",
+                ),
+        )
+
+    private fun buildGuidedSynchronizationOutcomeDialog(update: SyncUpdate): SyncFlowDialogState {
+        val title =
+            when (update.status) {
+                SyncStatus.Success -> "Synchronization complete"
+                SyncStatus.CancelledByUser -> "Synchronization cancelled"
+                else -> "Synchronization stopped"
+            }
+        val body =
+            buildString {
+                append(update.statusMessage)
+                update.diffSummary?.let { summary ->
+                    if (summary.isNotBlank()) {
+                        append("\n\n")
+                        append("Latest result: ")
+                        append(summary)
+                    }
+                }
+            }
+        return SyncFlowDialogState(
+            stepIndex = 4,
+            stepCount = 4,
+            stepLabel = "Finished",
+            title = title,
+            body = body,
+            allowClose = true,
+        )
+    }
+
     private fun performLedgerAction(
         target: SyncTarget,
         preStatus: SyncStatus,
@@ -1821,16 +1921,9 @@ class MainActivity : ComponentActivity() {
             var localPersistenceSucceeded = true
             if (update.deferredSynchronizationConflictPrompt != null) {
                 appDialogState = AppDialogState.ResolveSynchronizationConflict(update.deferredSynchronizationConflictPrompt)
-            } else {
-                update.deferredSynchronizationPrompt?.let { prompt ->
-                    appDialogState =
-                        AppDialogState.ConfirmSynchronization(
-                            title = prompt.title,
-                            body = prompt.body,
-                            confirmLabel = prompt.confirmLabel,
-                            cancelMessage = prompt.cancelMessage,
-                            mergedVault = prompt.mergedVault,
-                        )
+            } else if (guidedSynchronizationActive) {
+                update.syncFlowDialog?.let { dialog ->
+                    appDialogState = AppDialogState.SyncFlow(dialog)
                 }
             }
             update.replaceLocalVault?.let { replacement ->
@@ -1870,7 +1963,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            syncUiState = applySyncUpdate(syncUiState, update.copy(statusMessage = statusMessage))
+            val normalizedUpdate = update.copy(statusMessage = statusMessage)
+            syncUiState = applySyncUpdate(syncUiState, normalizedUpdate)
+            if (guidedSynchronizationActive && normalizedUpdate.deferredSynchronizationConflictPrompt == null) {
+                if (normalizedUpdate.status.isGuidedSynchronizationTerminal()) {
+                    appDialogState = AppDialogState.SyncFlow(buildGuidedSynchronizationOutcomeDialog(normalizedUpdate))
+                    guidedSynchronizationActive = false
+                }
+            }
         }
     }
 
@@ -1936,6 +2036,15 @@ internal data class PushConfirmationDialogState(
     val body: String,
     val canConfirm: Boolean,
     val confirmLabel: String = "Continue",
+)
+
+internal data class SyncFlowDialogState(
+    val stepIndex: Int,
+    val stepCount: Int,
+    val stepLabel: String,
+    val title: String,
+    val body: String,
+    val allowClose: Boolean = false,
 )
 
 internal sealed interface AppDialogState {
@@ -2017,15 +2126,14 @@ internal sealed interface AppDialogState {
         override val dismissLabel: String = "Cancel"
     }
 
-    data class ConfirmSynchronization(
-        override val title: String,
-        override val body: String,
-        override val confirmLabel: String,
-        val cancelMessage: String,
-        val mergedVault: Vault,
+    data class SyncFlow(
+        val state: SyncFlowDialogState,
     ) : AppDialogState {
-        override val canConfirm: Boolean = true
-        override val dismissLabel: String = "Cancel"
+        override val title: String get() = state.title
+        override val body: String get() = state.body
+        override val canConfirm: Boolean get() = state.allowClose
+        override val confirmLabel: String get() = "Close"
+        override val dismissLabel: String? = null
     }
 
     data class ResolveSynchronizationConflict(
@@ -2161,6 +2269,25 @@ private fun SyncTarget.userActionMessage(forUsb: String, forSpeculos: String): S
     when (this) {
         is SyncTarget.Usb -> forUsb
         is SyncTarget.Speculos -> forSpeculos
+    }
+
+private fun SyncStatus.isGuidedSynchronizationTerminal(): Boolean =
+    when (this) {
+        SyncStatus.Success,
+        SyncStatus.CancelledByUser,
+        SyncStatus.TransportError,
+        SyncStatus.ValidationError,
+        SyncStatus.WrongAppOpened,
+        -> true
+        SyncStatus.Idle,
+        SyncStatus.UsbPermissionRequired,
+        SyncStatus.DeviceConnected,
+        SyncStatus.WaitingForLedgerApproval,
+        SyncStatus.Dumping,
+        SyncStatus.Loading,
+        SyncStatus.Verifying,
+        SyncStatus.WriteDisabled,
+        -> false
     }
 
 private fun SyncTarget.pushSafetyMode(): PushSafetyMode =

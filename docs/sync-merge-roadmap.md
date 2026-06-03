@@ -50,8 +50,8 @@ Introduce a non-destructive `Synchronize` button that merges obvious additions f
 1. user taps `Synchronize`;
 2. companion reads the current device vault;
 3. companion computes a merge plan;
-4. if the plan is conflict-free, companion shows a merge summary and asks for confirmation;
-5. on confirmation, companion pushes the merged vault, verifies it, then persists the merged local vault;
+4. if the plan is conflict-free, companion pushes the merged vault immediately;
+5. companion verifies the device, then persists the merged local vault;
 6. if verification fails, the local vault is not replaced.
 
 ### Implementation Checklist
@@ -66,6 +66,8 @@ Introduce a non-destructive `Synchronize` button that merges obvious additions f
 - [x] reuse existing push safety policy on the merged vault
 - [x] add unit tests for merge planning
 - [x] add Android/UI coverage for the new sync entry point where useful
+- [x] reduce the sync screen to the daily-use `Synchronize` and `Current state` sections
+- [x] guide the sync path with explicit read/write/verify dialogs
 
 ### Acceptance Criteria
 
@@ -74,6 +76,23 @@ Introduce a non-destructive `Synchronize` button that merges obvious additions f
 - same-name, different-charset conflicts block the write path;
 - local persistence happens only after successful device verification;
 - manual flows still work.
+
+## Daily-Use UX Streamlining
+
+### Product Goal
+
+Make synchronization feel like a single guided action instead of a diagnostic console.
+
+### Checklist
+
+- [x] keep only `Synchronize` and `Current state` on the main sync screen
+- [x] move advanced/manual transport actions out of the day-to-day sync path
+- [x] show a guided modal for read, merge, write, and verify phases
+- [x] explain each Ledger approval in plain language before the user validates it
+- [x] show a final success dialog once local and device state converge
+- [x] surface `Last sync` on the home screen
+- [x] flag local additions since the last sync directly in the identifier list
+- [x] invite a new sync from the home screen when local changes are pending
 
 ## Phase 2: True Bidirectional Sync
 

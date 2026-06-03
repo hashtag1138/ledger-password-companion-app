@@ -35,8 +35,8 @@ internal data class SyncUpdate(
     val replaceLocalBackupJsonText: String? = null,
     val replaceSyncShadow: SyncShadowState? = null,
     val deferredLocalReplacementPrompt: DeferredLocalReplacementPrompt? = null,
-    val deferredSynchronizationPrompt: DeferredSynchronizationPrompt? = null,
     val deferredSynchronizationConflictPrompt: DeferredSynchronizationConflictPrompt? = null,
+    val syncFlowDialog: SyncFlowDialogState? = null,
     val clearDeviceEntries: Boolean = false,
     val clearDiffSummary: Boolean = false,
     val clearDiffLines: Boolean = false,
@@ -49,14 +49,6 @@ internal data class DeferredLocalReplacementPrompt(
     val confirmLabel: String,
     val cancelMessage: String,
     val successMessage: String,
-)
-
-internal data class DeferredSynchronizationPrompt(
-    val title: String,
-    val body: String,
-    val confirmLabel: String,
-    val cancelMessage: String,
-    val mergedVault: Vault,
 )
 
 internal enum class SyncConflictResolutionChoice {

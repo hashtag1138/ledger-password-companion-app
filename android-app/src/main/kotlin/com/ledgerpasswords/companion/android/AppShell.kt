@@ -47,6 +47,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -87,14 +88,18 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ledgerpasswords.companion.android.storage.SyncShadowState
 import com.ledgerpasswords.companion.core.LedgerPasswordsLimits
 import com.ledgerpasswords.companion.core.VaultCapacitySnapshot
 import com.ledgerpasswords.companion.core.capacitySnapshot
+import com.ledgerpasswords.companion.core.diff.VaultDiffer
 import com.ledgerpasswords.companion.core.model.CharsetFlag
 import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.validation.VaultValidator
+import java.text.DateFormat
+import java.util.Date
 import kotlinx.coroutines.launch
 
 private enum class AppPanel {
@@ -116,6 +121,7 @@ internal fun LedgerPasswordsCompanionShell(
     showDebugScreen: Boolean,
     entryEditorState: EntryEditorState?,
     syncUiState: SyncUiState,
+    syncShadowState: SyncShadowState?,
     transportMode: SyncTransportMode,
     speculosHost: String,
     speculosPortText: String,
@@ -205,6 +211,38 @@ internal fun LedgerPasswordsCompanionShell(
                     dismissButton = {
                         TextButton(onClick = onDismissAppDialog) {
                             Text("Cancel sync")
+                        }
+                    },
+                )
+            }
+
+            is AppDialogState.SyncFlow -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(dialogState.title)
+                            Text(
+                                text = "Step ${dialogState.state.stepIndex}/${dialogState.state.stepCount} • ${dialogState.state.stepLabel}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            LinearProgressIndicator(
+                                progress = { dialogState.state.stepIndex.toFloat() / dialogState.state.stepCount.toFloat() },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(dialogState.body)
+                        }
+                    },
+                    confirmButton = {
+                        if (dialogState.canConfirm) {
+                            TextButton(onClick = onConfirmAppDialog) {
+                                Text(dialogState.confirmLabel)
+                            }
                         }
                     },
                 )
@@ -368,6 +406,7 @@ internal fun LedgerPasswordsCompanionShell(
                             modifier = Modifier.padding(padding),
                             vault = localVault,
                             localVaultMessage = localVaultMessage,
+                            syncShadowState = syncShadowState,
                             onEditEntry = onEditEntry,
                             onCopyEntry = ::copyNicknameToClipboard,
                             onImportBackup = onImportBackup,
@@ -476,6 +515,7 @@ private fun HomeDashboardScreen(
     modifier: Modifier,
     vault: Vault,
     localVaultMessage: String,
+    syncShadowState: SyncShadowState?,
     onEditEntry: (PasswordIdentifier) -> Unit,
     onCopyEntry: (String) -> Unit,
     onImportBackup: () -> Unit,
@@ -484,6 +524,10 @@ private fun HomeDashboardScreen(
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var actionsExpanded by remember { mutableStateOf(false) }
+    val syncSnapshot =
+        remember(vault, syncShadowState) {
+            buildHomeSyncSnapshot(vault, syncShadowState)
+        }
     val filteredEntries =
         remember(vault.entries, search) {
             val needle = search.trim().lowercase()
@@ -508,6 +552,23 @@ private fun HomeDashboardScreen(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    "Last sync: ${syncSnapshot.lastSyncLabel}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (syncSnapshot.pendingChangeCount > 0) {
+                    Text(
+                        buildString {
+                            append(syncSnapshot.pendingChangeCount)
+                            append(" local change")
+                            if (syncSnapshot.pendingChangeCount > 1) append('s')
+                            append(" waiting to be synchronized.")
+                        },
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -519,7 +580,7 @@ private fun HomeDashboardScreen(
                     ) {
                         Icon(Icons.Rounded.CloudSync, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Sync")
+                        Text(if (syncSnapshot.pendingChangeCount > 0) "Synchronize now" else "Sync")
                     }
                     Box {
                         OutlinedButton(onClick = { actionsExpanded = true }) {
@@ -578,12 +639,41 @@ private fun HomeDashboardScreen(
             items(filteredEntries, key = { it.nickname }) { entry ->
                 CompactEntryRow(
                     entry = entry,
+                    isNewSinceLastSync = entry.nickname in syncSnapshot.pendingAddedNicknames,
                     onEdit = { onEditEntry(entry) },
                     onCopy = { onCopyEntry(entry.nickname) },
                 )
             }
         }
     }
+}
+
+private data class HomeSyncSnapshot(
+    val lastSyncLabel: String,
+    val pendingChangeCount: Int,
+    val pendingAddedNicknames: Set<String>,
+)
+
+private fun buildHomeSyncSnapshot(
+    vault: Vault,
+    syncShadowState: SyncShadowState?,
+): HomeSyncSnapshot {
+    if (syncShadowState == null) {
+        return HomeSyncSnapshot(
+            lastSyncLabel = "Never",
+            pendingChangeCount = vault.entries.size,
+            pendingAddedNicknames = vault.entries.mapTo(linkedSetOf()) { it.nickname },
+        )
+    }
+    val diff = VaultDiffer().diff(before = syncShadowState.lastSyncedVault, after = vault.sortedByNickname())
+    val lastSyncLabel =
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(syncShadowState.updatedAtEpochMillis))
+    return HomeSyncSnapshot(
+        lastSyncLabel = lastSyncLabel,
+        pendingChangeCount = diff.added.size + diff.removed.size + diff.changedCharsets.size,
+        pendingAddedNicknames = diff.added.mapTo(linkedSetOf()) { it.nickname },
+    )
 }
 
 @Composable
@@ -753,14 +843,7 @@ private fun SyncOperationsScreen(
             SyncStatus.Loading,
             SyncStatus.Verifying,
         )
-    val localCapacity = localVault.capacitySnapshot(syncUiState.storageSize ?: LedgerPasswordsLimits.DEFAULT_STORAGE_SIZE)
     val listState = rememberLazyListState()
-
-    LaunchedEffect(syncUiState.diffSummary, syncUiState.diffLines) {
-        if (syncUiState.diffLines.isNotEmpty()) {
-            listState.animateScrollToItem(2)
-        }
-    }
 
     LazyColumn(
         state = listState,
@@ -769,15 +852,22 @@ private fun SyncOperationsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            HeroCard(
-                title = if (transportMode == SyncTransportMode.Usb) "Ledger sync" else "Test sync",
-                subtitle = "Read, compare, then write to the target only if you understand the diff.",
+            SectionCard(
+                title = "Synchronize",
+                subtitle = "Merge local and Ledger identifiers, write the result, then verify it.",
             ) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatPill(syncUiState.deviceName ?: "No target")
-                    StatPill("${localVault.entries.size} local entries")
-                    StatPill("${syncUiState.deviceEntries?.toString() ?: "-"} on target")
-                }
+                Text(
+                    "Use this daily flow for normal updates. Debug and transport tools stay outside this screen.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                ActionButton(
+                    "Synchronize local and target",
+                    Icons.Rounded.CloudSync,
+                    onSynchronize,
+                    enabled = !busy,
+                    tag = UiTags.SyncSynchronize,
+                )
             }
         }
 
@@ -785,9 +875,34 @@ private fun SyncOperationsScreen(
             SectionCard(title = "Current state", subtitle = syncUiState.status.displayLabel()) {
                 Text(syncUiState.statusMessage, modifier = Modifier.testTag(UiTags.SyncStatusMessage))
                 Spacer(Modifier.height(10.dp))
-                Text("App: ${syncUiState.appName ?: "-"} ${syncUiState.appVersion ?: ""}".trim())
-                Text("Storage: ${syncUiState.storageSize?.toString() ?: "-"}")
-                Text("Local capacity: ${localCapacity.usedBytes}/${localCapacity.storageSize} bytes")
+                Text("Target: ${syncUiState.deviceName ?: "No target"}")
+                Text("Local identifiers: ${localVault.entries.size}")
+                Text("Target identifiers: ${syncUiState.deviceEntries?.toString() ?: "-"}")
+                if (syncUiState.appName != null || syncUiState.appVersion != null) {
+                    Text("App: ${syncUiState.appName ?: "-"} ${syncUiState.appVersion ?: ""}".trim())
+                }
+                if (syncUiState.diffSummary != null) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Latest sync result: ${syncUiState.diffSummary}", fontWeight = FontWeight.Medium)
+                    syncUiState.diffLines.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                if (syncUiState.status == SyncStatus.UsbPermissionRequired) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = onRequestPermission, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Verified, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Grant USB permission")
+                    }
+                } else if (!busy) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = onRefreshDevice, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.CloudSync, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Refresh target state")
+                    }
+                }
                 if (syncUiState.showVerifyCallToAction) {
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(onClick = onVerifyLedger, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
@@ -802,82 +917,6 @@ private fun SyncOperationsScreen(
                         "Dangerous override enabled: the hardware-safe policy can be bypassed from Debug.",
                         color = MaterialTheme.colorScheme.error,
                     )
-                }
-            }
-        }
-
-        if (syncUiState.diffLines.isNotEmpty()) {
-            item {
-                SectionCard(
-                    title = "Local vs Ledger diff",
-                    subtitle = syncUiState.diffSummary,
-                    modifier = Modifier.testTag(UiTags.SyncDiffSection),
-                ) {
-                    syncUiState.diffLines.forEach { line ->
-                        Text(line, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-        }
-
-        item {
-            SectionCard(
-                title = "Synchronize",
-                subtitle = "Read the target, merge obvious additions, then verify before replacing the local vault.",
-            ) {
-                ActionButton(
-                    "Synchronize local and target",
-                    Icons.Rounded.CloudSync,
-                    onSynchronize,
-                    enabled = !busy,
-                    tag = UiTags.SyncSynchronize,
-                )
-            }
-        }
-
-        item {
-            SectionCard(title = "Advanced: read & compare") {
-                ActionButton("Refresh target", Icons.Rounded.CloudSync, onRefreshDevice, enabled = !busy, tag = UiTags.SyncRefresh)
-                if (transportMode == SyncTransportMode.Usb) {
-                    Spacer(Modifier.height(10.dp))
-                    ActionButton("Request USB permission", Icons.Rounded.Verified, onRequestPermission, enabled = !busy)
-                }
-                Spacer(Modifier.height(10.dp))
-                ActionButton("Import from Ledger", Icons.Rounded.Download, onPullFromLedger, enabled = !busy, tag = UiTags.SyncPull)
-                Spacer(Modifier.height(10.dp))
-                ActionButton("Compare local with target", Icons.Rounded.Edit, onCompareWithLedger, enabled = !busy)
-            }
-        }
-
-        item {
-            SectionCard(
-                title = "Advanced: write & final check",
-                subtitle = "Export replaces the entire metadata block currently on the target.",
-                modifier = Modifier.testTag(UiTags.SyncWriteSection),
-            ) {
-                ActionButton(
-                    label = "Export local to Ledger",
-                    icon = Icons.Rounded.Upload,
-                    onClick = onPushToLedger,
-                    enabled = !busy,
-                    tone = ActionTone.Caution,
-                    tag = UiTags.SyncPush,
-                )
-                Spacer(Modifier.height(10.dp))
-                ActionButton(
-                    label = "Verify final consistency",
-                    icon = Icons.Rounded.Verified,
-                    onClick = onVerifyLedger,
-                    enabled = !busy,
-                    tag = UiTags.SyncVerify,
-                )
-                if (transportMode == SyncTransportMode.Speculos) {
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Rounded.BugReport, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Test tools")
-                    }
                 }
             }
         }
@@ -1180,10 +1219,22 @@ private fun SectionCard(
 @Composable
 private fun CompactEntryRow(
     entry: PasswordIdentifier,
+    isNewSinceLastSync: Boolean,
     onEdit: () -> Unit,
     onCopy: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isNewSinceLastSync) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+            ),
+    ) {
         ListItem(
             modifier =
                 Modifier.combinedClickable(
@@ -1191,18 +1242,34 @@ private fun CompactEntryRow(
                     onLongClick = onCopy,
                 ),
             headlineContent = {
-                Text(
-                    entry.nickname,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        entry.nickname,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isNewSinceLastSync) {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text("New locally") },
+                        )
+                    }
+                }
             },
             supportingContent = {
                 Text(
                     entry.charsets.toLedgerNames().joinToString(" • "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color =
+                        if (isNewSinceLastSync) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                 )
             },
             trailingContent = {
