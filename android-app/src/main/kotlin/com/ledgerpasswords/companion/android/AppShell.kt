@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -44,8 +45,10 @@ import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +67,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -142,9 +146,12 @@ internal fun LedgerPasswordsCompanionShell(
     onCompareWithLedger: () -> Unit,
     onPushToLedger: () -> Unit,
     onVerifyLedger: () -> Unit,
-    pushConfirmationDialogState: PushConfirmationDialogState?,
-    onDismissPushConfirmation: () -> Unit,
-    onConfirmPushToLedger: () -> Unit,
+    startupWarningEnabled: Boolean,
+    onStartupWarningEnabledChanged: (Boolean) -> Unit,
+    appDialogState: AppDialogState?,
+    onDismissAppDialog: () -> Unit,
+    onConfirmAppDialog: () -> Unit,
+    onStartupWarningDismissPreferenceChanged: (Boolean) -> Unit,
 ) {
     val panel =
         when {
@@ -169,28 +176,59 @@ internal fun LedgerPasswordsCompanionShell(
     }
 
     LedgerWarmTheme {
-        pushConfirmationDialogState?.let { dialogState ->
+        appDialogState?.let { dialogState ->
             AlertDialog(
-                onDismissRequest = onDismissPushConfirmation,
+                onDismissRequest = {
+                    if (dialogState.dismissLabel != null) {
+                        onDismissAppDialog()
+                    }
+                },
                 title = { Text(dialogState.title) },
                 text = {
-                    Text(dialogState.body)
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text(dialogState.body)
+                        if (dialogState is AppDialogState.StartupWarning) {
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(MaterialTheme.shapes.small)
+                                        .clickable {
+                                            onStartupWarningDismissPreferenceChanged(!dialogState.dontShowAgain)
+                                        }
+                                        .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Checkbox(
+                                    checked = dialogState.dontShowAgain,
+                                    onCheckedChange = { checked ->
+                                        onStartupWarningDismissPreferenceChanged(checked)
+                                    },
+                                )
+                                Text("Ne plus afficher au démarrage")
+                            }
+                        }
+                    }
                 },
                 confirmButton =
                     if (dialogState.canConfirm) {
                         {
-                            TextButton(onClick = onConfirmPushToLedger) {
+                            TextButton(onClick = onConfirmAppDialog) {
                                 Text(dialogState.confirmLabel)
                             }
                         }
                     } else {
                         {}
                     },
-                dismissButton = {
-                    TextButton(onClick = onDismissPushConfirmation) {
-                        Text(if (dialogState.canConfirm) "Annuler" else "Fermer")
-                    }
-                },
+                dismissButton =
+                    dialogState.dismissLabel?.let { dismissLabel ->
+                        {
+                            TextButton(onClick = onDismissAppDialog) {
+                                Text(dismissLabel)
+                            }
+                        }
+                    },
             )
         }
 
@@ -335,6 +373,8 @@ internal fun LedgerPasswordsCompanionShell(
                             onConfirmationChanged = onHardwarePushConfirmationChanged,
                             dangerousOverrideEnabled = hardwareDangerousOverrideEnabled,
                             onOpenDebug = onOpenDebug,
+                            startupWarningEnabled = startupWarningEnabled,
+                            onStartupWarningEnabledChanged = onStartupWarningEnabledChanged,
                         )
 
                     AppPanel.About ->
@@ -636,7 +676,15 @@ private fun EntryWorkbenchScreen(
             }
         }
         if (!state.isCreation) {
-            OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+            ) {
                 Text("Supprimer cet identifiant")
             }
         }
@@ -666,16 +714,24 @@ private fun SyncOperationsScreen(
             SyncStatus.Verifying,
         )
     val localCapacity = localVault.capacitySnapshot(syncUiState.storageSize ?: LedgerPasswordsLimits.DEFAULT_STORAGE_SIZE)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(syncUiState.diffSummary, syncUiState.diffLines) {
+        if (syncUiState.diffLines.isNotEmpty()) {
+            listState.animateScrollToItem(2)
+        }
+    }
 
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize().testTag(UiTags.SyncScroll),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
             HeroCard(
-                title = "Synchronisation ${if (transportMode == SyncTransportMode.Usb) "matérielle" else "émulée"}",
-                subtitle = "Les opérations normales restent ici. Les transports et réglages Speculos sont isolés dans Debug.",
+                title = if (transportMode == SyncTransportMode.Usb) "Synchronisation Ledger" else "Synchronisation de test",
+                subtitle = "Lis, compare puis n'écris sur la cible que si le diff est compris.",
             ) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatPill(syncUiState.deviceName ?: "Aucune cible")
@@ -686,12 +742,20 @@ private fun SyncOperationsScreen(
         }
 
         item {
-            SectionCard(title = "État courant", subtitle = syncUiState.status.name) {
+            SectionCard(title = "État courant", subtitle = syncUiState.status.frenchLabel()) {
                 Text(syncUiState.statusMessage, modifier = Modifier.testTag(UiTags.SyncStatusMessage))
                 Spacer(Modifier.height(10.dp))
                 Text("App : ${syncUiState.appName ?: "-"} ${syncUiState.appVersion ?: ""}".trim())
                 Text("Storage : ${syncUiState.storageSize?.toString() ?: "-"}")
                 Text("Capacité locale : ${localCapacity.usedBytes}/${localCapacity.storageSize} octets")
+                if (syncUiState.showVerifyCallToAction) {
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = onVerifyLedger, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.Verified, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Vérifier maintenant")
+                    }
+                }
                 if (transportMode == SyncTransportMode.Usb && dangerousOverrideEnabled) {
                     Spacer(Modifier.height(10.dp))
                     Text(
@@ -699,19 +763,21 @@ private fun SyncOperationsScreen(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                if (transportMode == SyncTransportMode.Speculos) {
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onOpenDebug) {
-                        Icon(Icons.Rounded.BugReport, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Outils debug")
+            }
+        }
+
+        if (syncUiState.diffLines.isNotEmpty()) {
+            item {
+                SectionCard(title = "Diff local vs Ledger", subtitle = syncUiState.diffSummary) {
+                    syncUiState.diffLines.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
         }
 
         item {
-            SectionCard(title = "Actions") {
+            SectionCard(title = "Lecture & comparaison") {
                 ActionButton("Rafraîchir la cible", Icons.Rounded.CloudSync, onRefreshDevice, enabled = !busy, tag = UiTags.SyncRefresh)
                 if (transportMode == SyncTransportMode.Usb) {
                     Spacer(Modifier.height(10.dp))
@@ -721,18 +787,36 @@ private fun SyncOperationsScreen(
                 ActionButton("Importer depuis Ledger", Icons.Rounded.Download, onPullFromLedger, enabled = !busy, tag = UiTags.SyncPull)
                 Spacer(Modifier.height(10.dp))
                 ActionButton("Comparer le local avec la cible", Icons.Rounded.Edit, onCompareWithLedger, enabled = !busy)
-                Spacer(Modifier.height(10.dp))
-                ActionButton("Exporter le local vers Ledger", Icons.Rounded.Upload, onPushToLedger, enabled = !busy, tag = UiTags.SyncPush)
-                Spacer(Modifier.height(10.dp))
-                ActionButton("Vérifier la cohérence finale", Icons.Rounded.Verified, onVerifyLedger, enabled = !busy, tag = UiTags.SyncVerify)
             }
         }
 
-        if (syncUiState.diffLines.isNotEmpty()) {
-            item {
-                SectionCard(title = "Diff local vs Ledger") {
-                    syncUiState.diffLines.forEach { line ->
-                        Text(line, style = MaterialTheme.typography.bodyMedium)
+        item {
+            SectionCard(
+                title = "Écriture & contrôle final",
+                subtitle = "Exporter remplace tout le bloc metadata présent sur la cible.",
+            ) {
+                ActionButton(
+                    label = "Exporter le local vers Ledger",
+                    icon = Icons.Rounded.Upload,
+                    onClick = onPushToLedger,
+                    enabled = !busy,
+                    tone = ActionTone.Caution,
+                    tag = UiTags.SyncPush,
+                )
+                Spacer(Modifier.height(10.dp))
+                ActionButton(
+                    label = "Vérifier la cohérence finale",
+                    icon = Icons.Rounded.Verified,
+                    onClick = onVerifyLedger,
+                    enabled = !busy,
+                    tag = UiTags.SyncVerify,
+                )
+                if (transportMode == SyncTransportMode.Speculos) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Rounded.BugReport, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Outils de test")
                     }
                 }
             }
@@ -747,6 +831,8 @@ private fun SettingsScreen(
     onConfirmationChanged: (Boolean) -> Unit,
     dangerousOverrideEnabled: Boolean,
     onOpenDebug: () -> Unit,
+    startupWarningEnabled: Boolean,
+    onStartupWarningEnabledChanged: (Boolean) -> Unit,
 ) {
     Column(
         modifier =
@@ -758,9 +844,9 @@ private fun SettingsScreen(
     ) {
         HeroCard(
             title = "Réglages",
-            subtitle = "Les fonctions normales restent centrées sur le vault local et la sync utilisateur.",
+            subtitle = "Confirme les actions sensibles et choisis ce qui doit s'afficher au démarrage.",
         ) {
-            Text("Le thème suit une palette sombre chaude pensée pour réduire l’éblouissement pendant la manipulation du Ledger.")
+            Text("Les réglages de test et les contournements risqués restent isolés dans l'écran Debug.")
         }
 
         SectionCard(title = "Sécurité des écritures") {
@@ -781,8 +867,26 @@ private fun SettingsScreen(
             }
         }
 
+        SectionCard(title = "Avertissement au démarrage") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Afficher l'avertissement expérimental", fontWeight = FontWeight.Medium)
+                    Text(
+                        "Rappelle au lancement que l'app reste expérimentale avant toute écriture réelle.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(checked = startupWarningEnabled, onCheckedChange = onStartupWarningEnabledChanged)
+            }
+        }
+
         SectionCard(title = "Debug séparé") {
-            Text("Les réglages de transport Speculos et l’émulation restent dans un écran Debug dédié.")
+            Text("Les transports de test et l'override dangereux restent regroupés dans un écran séparé.")
             if (dangerousOverrideEnabled) {
                 Text(
                     "Un override dangereux est actuellement actif dans Debug.",
@@ -1024,6 +1128,14 @@ private fun CompactEntryRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             },
+            supportingContent = {
+                Text(
+                    entry.charsets.toLedgerNames().joinToString(" • "),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
             trailingContent = {
                 IconButton(onClick = onCopy) {
                     Icon(Icons.Rounded.ContentCopy, contentDescription = "Copier ${entry.nickname}")
@@ -1039,17 +1151,38 @@ private fun ActionButton(
     icon: ImageVector,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    tone: ActionTone = ActionTone.Default,
     tag: String? = null,
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().then(if (tag != null) Modifier.testTag(tag) else Modifier),
+        colors =
+            when (tone) {
+                ActionTone.Default -> ButtonDefaults.buttonColors()
+                ActionTone.Caution ->
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    )
+                ActionTone.Danger ->
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+            },
     ) {
         Icon(icon, contentDescription = null)
         Spacer(Modifier.width(8.dp))
         Text(label)
     }
+}
+
+private enum class ActionTone {
+    Default,
+    Caution,
+    Danger,
 }
 
 @Composable

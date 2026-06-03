@@ -45,6 +45,32 @@ class SyncUiLogicTest {
     }
 
     @Test
+    fun `applySyncUpdate clears diff summary and verify CTA when requested`() {
+        val previous =
+            SyncUiState(
+                diffSummary = "1 ajout",
+                diffLines = listOf("ancien diff"),
+                showVerifyCallToAction = true,
+            )
+
+        val next =
+            applySyncUpdate(
+                previous,
+                SyncUpdate(
+                    status = SyncStatus.Idle,
+                    statusMessage = "Retour au repos",
+                    clearDiffSummary = true,
+                    clearDiffLines = true,
+                    showVerifyCallToAction = false,
+                ),
+            )
+
+        assertNull(next.diffSummary)
+        assertEquals(emptyList<String>(), next.diffLines)
+        assertEquals(false, next.showVerifyCallToAction)
+    }
+
+    @Test
     fun `applySyncUpdate replaces provided fields and preserves omitted metadata`() {
         val previous =
             SyncUiState(
@@ -65,6 +91,7 @@ class SyncUiLogicTest {
                     statusMessage = "Comparaison terminée",
                     appVersion = "1.3.1",
                     deviceEntries = 2,
+                    diffSummary = "1 ajout",
                     diffLines = listOf("Nouveau diff"),
                 ),
             )
@@ -75,7 +102,35 @@ class SyncUiLogicTest {
         assertEquals("1.3.1", next.appVersion)
         assertEquals(4096, next.storageSize)
         assertEquals(2, next.deviceEntries)
+        assertEquals("1 ajout", next.diffSummary)
         assertEquals(listOf("Nouveau diff"), next.diffLines)
+    }
+
+    @Test
+    fun `renderLedgerDiffSummary returns concise counts`() {
+        val diff =
+            differ.diff(
+                before = Vault(
+                    entries = listOf(
+                        PasswordIdentifier("gmail"),
+                        PasswordIdentifier("github", charsets = CharsetPolicy.fromCli("lower")),
+                    ),
+                ),
+                after = Vault(
+                    entries = listOf(
+                        PasswordIdentifier("github", charsets = CharsetPolicy.fromCli("upper,lower,numbers")),
+                        PasswordIdentifier("proton"),
+                    ),
+                ),
+            )
+
+        assertEquals("1 ajout • 1 suppression • 1 modification", renderLedgerDiffSummary(diff))
+    }
+
+    @Test
+    fun `sync status labels are user friendly`() {
+        assertEquals("Blocage de sécurité", SyncStatus.ValidationError.frenchLabel())
+        assertEquals("Validation sur Ledger", SyncStatus.WaitingForLedgerApproval.frenchLabel())
     }
 
     @Test

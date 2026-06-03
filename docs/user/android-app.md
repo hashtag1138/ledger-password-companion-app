@@ -26,6 +26,7 @@ adb shell am start -n com.ledgerpasswords.companion/com.ledgerpasswords.companio
 
 Depuis l'écran principal :
 
+- au premier lancement, un avertissement rappelle que l'app reste expérimentale ; il peut être masqué pour l'avenir puis réactivé dans `Réglages` ;
 - la liste locale affiche les identifiants déjà stockés sur le téléphone ;
 - toucher une ligne ouvre l'édition ;
 - l'icône de copie copie rapidement le nickname ;
@@ -46,11 +47,13 @@ Important :
 - la limite utile est de `19` octets UTF-8 par nickname ;
 - les espaces internes sont autorisés.
 
+La suppression locale demande maintenant une confirmation explicite.
+
 ## Importer ou exporter un `backup.json`
 
 Depuis l'écran principal :
 
-- `Importer backup.json` remplace l'état local par le contenu du fichier ;
+- `Importer backup.json` peut demander une confirmation si l'état local actuel va être remplacé ;
 - `Exporter backup.json` écrit l'état local dans un fichier choisi via le sélecteur Android.
 
 Le companion conserve si possible les `raw_metadatas` exactes du backup, mais il peut bloquer plus tard un `push` réel si le fichier contient des anomalies jugées dangereuses.
@@ -73,7 +76,9 @@ Workflow recommandé :
 5. Utiliser `Exporter le local vers Ledger` seulement si le diff est bien compris.
 6. Utiliser `Vérifier la cohérence finale` après l'écriture.
 
-Le `push` réel et le `verify` restent volontairement séparés. L'app ne relance pas automatiquement une lecture après écriture.
+L'écran de sync sépare maintenant la lecture de l'écriture, affiche le diff au-dessus des actions d'écriture et scrolle automatiquement dessus après comparaison ou vérification.
+
+Le `push` réel et le `verify` restent volontairement séparés. L'app ne relance pas automatiquement une lecture après écriture, mais propose `Vérifier maintenant` juste après un export réussi.
 
 ## Messages de blocage avant push
 
@@ -86,6 +91,8 @@ Le companion peut refuser un `push` réel si l'état local présente un risque t
 - override de sécurité requis.
 
 Dans ce cas, lis le résumé affiché dans le popup de confirmation ou dans le message de sync.
+
+Le popup de confirmation du `push` rappelle aussi le dernier diff connu lorsqu'il est disponible.
 
 ## Utiliser Speculos sur émulateur
 

@@ -7,7 +7,10 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val EmberBackground = Color(0xFF120D0A)
 private val EmberSurface = Color(0xFF1C130F)
@@ -57,6 +60,17 @@ private val LedgerWarmShapes =
         large = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
     )
 
+private val LedgerWarmTypography =
+    Typography(
+        headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+        titleLarge = TextStyle(fontSize = 21.sp, lineHeight = 27.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium = TextStyle(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 23.sp),
+        bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
+        bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+        labelLarge = TextStyle(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    )
+
 @Composable
 internal fun LedgerWarmTheme(
     content: @Composable () -> Unit,
@@ -64,7 +78,7 @@ internal fun LedgerWarmTheme(
     val colors = if (isSystemInDarkTheme()) LedgerWarmDarkColors else LedgerWarmDarkColors
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography(),
+        typography = LedgerWarmTypography,
         shapes = LedgerWarmShapes,
         content = content,
     )
