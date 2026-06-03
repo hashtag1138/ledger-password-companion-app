@@ -4,12 +4,14 @@ import com.ledgerpasswords.companion.core.diff.VaultDiffer
 import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
+import com.ledgerpasswords.companion.core.sync.VaultMergePlanner
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class SyncUiLogicTest {
     private val differ = VaultDiffer()
+    private val mergePlanner = VaultMergePlanner()
 
     @Test
     fun `applySyncUpdate clears stale device counters and diff lines`() {
@@ -172,6 +174,45 @@ class SyncUiLogicTest {
                 "Different charsets: github [Ledger=LOWERCASE] -> [Local=UPPERCASE,LOWERCASE,NUMBERS]",
             ),
             renderLedgerDiffLines(diff),
+        )
+    }
+
+    @Test
+    fun `renderSynchronizationSummary returns concise merge counts`() {
+        val plan =
+            mergePlanner.plan(
+                local = Vault(entries = listOf(PasswordIdentifier("github"))),
+                remote = Vault(entries = listOf(PasswordIdentifier("gmail"))),
+            )
+
+        assertEquals("1 local-only • 1 target-only", renderSynchronizationSummary(plan))
+    }
+
+    @Test
+    fun `renderSynchronizationLines formats keep import and conflict actions`() {
+        val plan =
+            mergePlanner.plan(
+                local = Vault(
+                    entries = listOf(
+                        PasswordIdentifier("github", CharsetPolicy.fromCli("lower")),
+                        PasswordIdentifier("proton"),
+                    ),
+                ),
+                remote = Vault(
+                    entries = listOf(
+                        PasswordIdentifier("github", CharsetPolicy.fromCli("upper,lower,numbers")),
+                        PasswordIdentifier("gmail"),
+                    ),
+                ),
+            )
+
+        assertEquals(
+            listOf(
+                "Keep local only: proton [ALL_SETS]",
+                "Import from target: gmail [ALL_SETS]",
+                "Conflict: github [Local=LOWERCASE] -> [Target=UPPERCASE,LOWERCASE,NUMBERS]",
+            ),
+            renderSynchronizationLines(plan),
         )
     }
 }

@@ -2,6 +2,7 @@ package com.ledgerpasswords.companion.android
 
 import com.ledgerpasswords.companion.core.diff.VaultDiff
 import com.ledgerpasswords.companion.core.model.Vault
+import com.ledgerpasswords.companion.core.sync.VaultMergePlan
 
 internal data class SyncUiState(
     val status: SyncStatus = SyncStatus.Idle,
@@ -28,6 +29,7 @@ internal data class SyncUpdate(
     val replaceLocalVault: Vault? = null,
     val replaceLocalBackupJsonText: String? = null,
     val deferredLocalReplacementPrompt: DeferredLocalReplacementPrompt? = null,
+    val deferredSynchronizationPrompt: DeferredSynchronizationPrompt? = null,
     val clearDeviceEntries: Boolean = false,
     val clearDiffSummary: Boolean = false,
     val clearDiffLines: Boolean = false,
@@ -40,6 +42,14 @@ internal data class DeferredLocalReplacementPrompt(
     val confirmLabel: String,
     val cancelMessage: String,
     val successMessage: String,
+)
+
+internal data class DeferredSynchronizationPrompt(
+    val title: String,
+    val body: String,
+    val confirmLabel: String,
+    val cancelMessage: String,
+    val mergedVault: Vault,
 )
 
 internal enum class SyncStatus {
@@ -130,6 +140,39 @@ internal fun renderLedgerDiffLines(diff: VaultDiff): List<String> =
                     "Different charsets: ${change.after.nickname} " +
                         "[Ledger=${change.before.charsets.toLedgerNames().joinToString(",")}] -> " +
                         "[Local=${change.after.charsets.toLedgerNames().joinToString(",")}]",
+                )
+            }
+        }
+    }
+
+internal fun renderSynchronizationSummary(plan: VaultMergePlan): String =
+    if (!plan.hasChanges) {
+        "Already synchronized."
+    } else {
+        buildList {
+            if (plan.localOnly.isNotEmpty()) add("${plan.localOnly.size} local-only")
+            if (plan.remoteOnly.isNotEmpty()) add("${plan.remoteOnly.size} target-only")
+            if (plan.identical.isNotEmpty()) add("${plan.identical.size} unchanged")
+            if (plan.conflicts.isNotEmpty()) add("${plan.conflicts.size} conflict${if (plan.conflicts.size > 1) "s" else ""}")
+        }.joinToString(" • ")
+    }
+
+internal fun renderSynchronizationLines(plan: VaultMergePlan): List<String> =
+    if (!plan.hasChanges) {
+        listOf("No change required. Local and target already match.")
+    } else {
+        buildList {
+            plan.localOnly.forEach { entry ->
+                add("Keep local only: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+            }
+            plan.remoteOnly.forEach { entry ->
+                add("Import from target: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+            }
+            plan.conflicts.forEach { conflict ->
+                add(
+                    "Conflict: ${conflict.nickname} " +
+                        "[Local=${conflict.localEntry.charsets.toLedgerNames().joinToString(",")}] -> " +
+                        "[Target=${conflict.remoteEntry.charsets.toLedgerNames().joinToString(",")}]",
                 )
             }
         }

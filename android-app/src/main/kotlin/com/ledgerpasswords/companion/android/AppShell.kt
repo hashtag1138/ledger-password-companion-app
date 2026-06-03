@@ -142,6 +142,7 @@ internal fun LedgerPasswordsCompanionShell(
     onSpeculosPortChanged: (String) -> Unit,
     onRequestPermission: () -> Unit,
     onRefreshDevice: () -> Unit,
+    onSynchronize: () -> Unit,
     onPullFromLedger: () -> Unit,
     onCompareWithLedger: () -> Unit,
     onPushToLedger: () -> Unit,
@@ -360,6 +361,7 @@ internal fun LedgerPasswordsCompanionShell(
                             dangerousOverrideEnabled = hardwareDangerousOverrideEnabled,
                             onRequestPermission = onRequestPermission,
                             onRefreshDevice = onRefreshDevice,
+                            onSynchronize = onSynchronize,
                             onPullFromLedger = onPullFromLedger,
                             onCompareWithLedger = onCompareWithLedger,
                             onPushToLedger = onPushToLedger,
@@ -701,6 +703,7 @@ private fun SyncOperationsScreen(
     dangerousOverrideEnabled: Boolean,
     onRequestPermission: () -> Unit,
     onRefreshDevice: () -> Unit,
+    onSynchronize: () -> Unit,
     onPullFromLedger: () -> Unit,
     onCompareWithLedger: () -> Unit,
     onPushToLedger: () -> Unit,
@@ -782,7 +785,22 @@ private fun SyncOperationsScreen(
         }
 
         item {
-            SectionCard(title = "Read & compare") {
+            SectionCard(
+                title = "Synchronize",
+                subtitle = "Read the target, merge obvious additions, then verify before replacing the local vault.",
+            ) {
+                ActionButton(
+                    "Synchronize local and target",
+                    Icons.Rounded.CloudSync,
+                    onSynchronize,
+                    enabled = !busy,
+                    tag = UiTags.SyncSynchronize,
+                )
+            }
+        }
+
+        item {
+            SectionCard(title = "Advanced: read & compare") {
                 ActionButton("Refresh target", Icons.Rounded.CloudSync, onRefreshDevice, enabled = !busy, tag = UiTags.SyncRefresh)
                 if (transportMode == SyncTransportMode.Usb) {
                     Spacer(Modifier.height(10.dp))
@@ -797,7 +815,7 @@ private fun SyncOperationsScreen(
 
         item {
             SectionCard(
-                title = "Write & final check",
+                title = "Advanced: write & final check",
                 subtitle = "Export replaces the entire metadata block currently on the target.",
                 modifier = Modifier.testTag(UiTags.SyncWriteSection),
             ) {

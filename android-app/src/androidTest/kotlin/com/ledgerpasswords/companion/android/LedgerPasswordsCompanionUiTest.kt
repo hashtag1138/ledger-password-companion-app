@@ -95,6 +95,9 @@ class LedgerPasswordsCompanionUiTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(UiTags.SyncScroll)
+            .performScrollToNode(hasTestTag(UiTags.SyncSynchronize))
+        composeRule.onNodeWithTag(UiTags.SyncSynchronize).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTags.SyncScroll)
             .performScrollToNode(hasText("Verify now"))
         composeRule.onNodeWithText("Verify now").assertIsDisplayed()
         composeRule.onNodeWithTag(UiTags.SyncScroll)
@@ -175,6 +178,7 @@ private fun ComposeContentTestRule.setShellContent(
     onSpeculosPortChanged: (String) -> Unit = {},
     onRequestPermission: () -> Unit = {},
     onRefreshDevice: () -> Unit = {},
+    onSynchronize: () -> Unit = {},
     onPullFromLedger: () -> Unit = {},
     onCompareWithLedger: () -> Unit = {},
     onPushToLedger: () -> Unit = {},
@@ -220,6 +224,7 @@ private fun ComposeContentTestRule.setShellContent(
             onSpeculosPortChanged = onSpeculosPortChanged,
             onRequestPermission = onRequestPermission,
             onRefreshDevice = onRefreshDevice,
+            onSynchronize = onSynchronize,
             onPullFromLedger = onPullFromLedger,
             onCompareWithLedger = onCompareWithLedger,
             onPushToLedger = onPushToLedger,

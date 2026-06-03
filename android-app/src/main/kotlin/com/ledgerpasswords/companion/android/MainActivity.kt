@@ -63,6 +63,8 @@ import com.ledgerpasswords.companion.core.risk.PushRiskDecision
 import com.ledgerpasswords.companion.core.risk.PushRiskFinding
 import com.ledgerpasswords.companion.core.risk.PushRiskSeverity
 import com.ledgerpasswords.companion.core.risk.PushSafetyMode
+import com.ledgerpasswords.companion.core.sync.VaultMergePlan
+import com.ledgerpasswords.companion.core.sync.VaultMergePlanner
 import com.ledgerpasswords.companion.core.validation.ValidationResult
 import com.ledgerpasswords.companion.core.validation.VaultValidator
 import com.ledgerpasswords.companion.ledger.backup.BackupInspection
@@ -85,6 +87,7 @@ class MainActivity : ComponentActivity() {
     private val backupJsonCodec = BackupJsonCodec()
     private val metadataCodec = MetadataCodec()
     private val differ = VaultDiffer()
+    private val mergePlanner = VaultMergePlanner()
 
     private val importBackupLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -253,6 +256,7 @@ class MainActivity : ComponentActivity() {
                 onSpeculosPortChanged = { port -> speculosPortText = port },
                 onRequestPermission = { requestUsbPermission() },
                 onRefreshDevice = { refreshSelectedTransport(preferredDevice = intent.usbDeviceOrNull()) },
+                onSynchronize = { synchronizeVaults() },
                 onPullFromLedger = { pullFromLedger() },
                 onCompareWithLedger = { compareWithLedger() },
                 onPushToLedger = {
@@ -415,6 +419,54 @@ class MainActivity : ComponentActivity() {
         return LedgerPushRiskPolicy(storageSize).assess(normalizedVault, mode, findings)
     }
 
+    private fun assessMergedPushRisk(
+        vault: Vault,
+        storageSize: Int,
+        mode: PushSafetyMode,
+    ): LedgerPushRiskAssessment = LedgerPushRiskPolicy(storageSize).assess(vault.copy(source = VaultSource.Local).sortedByNickname(), mode)
+
+    private fun buildSynchronizationPrompt(
+        target: SyncTarget,
+        plan: VaultMergePlan,
+        mergedVault: Vault,
+        assessment: LedgerPushRiskAssessment,
+    ): DeferredSynchronizationPrompt {
+        val dangerousHardwareWrite =
+            target is SyncTarget.Usb &&
+                assessment.decision == PushRiskDecision.Block &&
+                hardwareDangerousOverrideEnabled
+        val title = if (dangerousHardwareWrite) "Confirm dangerous synchronization" else "Confirm synchronization"
+        val confirmLabel = if (dangerousHardwareWrite) "Force sync" else "Synchronize"
+        val body =
+            buildString {
+                append("Merged result: ${mergedVault.entries.size} identifier")
+                if (mergedVault.entries.size > 1) append('s')
+                append(". ")
+                append(renderSynchronizationSummary(plan))
+                append("\n\n")
+                append(
+                    target.userActionMessage(
+                        "The companion will write the merged vault to the Ledger, verify the result, then replace the local vault on the phone.",
+                        "The companion will write the merged vault to Speculos, verify the result, then replace the local vault on the phone.",
+                    ),
+                )
+                if (assessment.decision == PushRiskDecision.Warn || dangerousHardwareWrite) {
+                    append("\n\n")
+                    append(assessment.summaryLines().joinToString(separator = "\n"))
+                    if (dangerousHardwareWrite) {
+                        append("\n\nThe dangerous override is enabled in Debug, so the hardware-safe block can be bypassed for this write.")
+                    }
+                }
+            }
+        return DeferredSynchronizationPrompt(
+            title = title,
+            body = body,
+            confirmLabel = confirmLabel,
+            cancelMessage = "Synchronization cancelled. No write was performed.",
+            mergedVault = mergedVault,
+        )
+    }
+
     private fun buildPushConfirmationDialogState(): PushConfirmationDialogState {
         val assessment = assessLocalPushRisk(localVault, effectiveStorageSize(), PushSafetyMode.HardwareSafe)
         val baseIntro =
@@ -477,6 +529,14 @@ class MainActivity : ComponentActivity() {
                     )
             }
 
+            is AppDialogState.ConfirmSynchronization -> {
+                syncUiState =
+                    syncUiState.copy(
+                        status = SyncStatus.CancelledByUser,
+                        statusMessage = dialog.cancelMessage,
+                    )
+            }
+
             else -> Unit
         }
         appDialogState = null
@@ -524,6 +584,11 @@ class MainActivity : ComponentActivity() {
                                 "${dialog.confirmedStatusMessage} The local replacement could not be persisted."
                             },
                     )
+            }
+
+            is AppDialogState.ConfirmSynchronization -> {
+                appDialogState = null
+                executeSynchronization(dialog)
             }
 
             null -> Unit
@@ -1019,6 +1084,228 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun synchronizeVaults() {
+        val target = requireCurrentTarget() ?: return
+        val localSnapshot = localVault.copy(source = VaultSource.Local).sortedByNickname()
+        DiagnosticLogStore.mark("synchronizeVaults target=${target.label} localEntries=${localSnapshot.entries.size}")
+        performLedgerAction(
+            target = target,
+            preStatus = SyncStatus.WaitingForLedgerApproval,
+            preMessage =
+                target.userActionMessage(
+                    "Approve the read to prepare synchronization.",
+                    "Preparing synchronization from Speculos...",
+                ),
+        ) { client ->
+            val info = client.getAppInfo()
+            if (info.name != EXPECTED_APP_NAME) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.WrongAppOpened,
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    showVerifyCallToAction = false,
+                )
+            }
+            val config = client.getAppConfig()
+            updateSyncStateFromWorker(
+                SyncUpdate(
+                    status = SyncStatus.Dumping,
+                    statusMessage = "Reading metadata for synchronization...",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    showVerifyCallToAction = false,
+                ),
+            )
+            val deviceVault = metadataCodec.decode(client.dumpMetadatas(config.storageSize)).vault.copy(source = VaultSource.LedgerDevice).sortedByNickname()
+            val plan = mergePlanner.plan(localSnapshot, deviceVault)
+            val summary = renderSynchronizationSummary(plan)
+            val lines = renderSynchronizationLines(plan)
+
+            if (!plan.hasChanges) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.Success,
+                    statusMessage = "Local and target are already synchronized.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    deviceEntries = deviceVault.entries.size,
+                    diffSummary = summary,
+                    diffLines = lines,
+                    showVerifyCallToAction = false,
+                )
+            }
+
+            if (!plan.canMerge) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage = "Synchronization blocked: resolve the listed conflict(s) manually before writing.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    deviceEntries = deviceVault.entries.size,
+                    diffSummary = summary,
+                    diffLines = lines,
+                    showVerifyCallToAction = false,
+                )
+            }
+
+            val mergedVault = requireNotNull(plan.mergedVault)
+            val assessment = assessMergedPushRisk(mergedVault, config.storageSize, target.pushSafetyMode())
+            if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage =
+                        assessment.summaryLines().joinToString(separator = "\n") +
+                            "\nSynchronization stopped before writing. Open Debug to enable the dangerous override if you really want to force the merged hardware write.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    deviceEntries = deviceVault.entries.size,
+                    diffSummary = summary,
+                    diffLines = lines,
+                    showVerifyCallToAction = false,
+                )
+            }
+            if (!assessment.validation.isValid) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage = assessment.validation.toUserMessage(),
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    deviceEntries = deviceVault.entries.size,
+                    diffSummary = summary,
+                    diffLines = lines,
+                    showVerifyCallToAction = false,
+                )
+            }
+
+            SyncUpdate(
+                status = SyncStatus.Success,
+                statusMessage = "Synchronization plan ready. Review the merge and confirm the write.",
+                appName = info.name,
+                appVersion = info.version,
+                storageSize = config.storageSize,
+                deviceEntries = deviceVault.entries.size,
+                diffSummary = summary,
+                diffLines = lines,
+                deferredSynchronizationPrompt = buildSynchronizationPrompt(target, plan, mergedVault, assessment),
+                showVerifyCallToAction = false,
+            )
+        }
+    }
+
+    private fun executeSynchronization(dialog: AppDialogState.ConfirmSynchronization) {
+        val target = requireCurrentTarget() ?: return
+        val mergedVault = dialog.mergedVault.copy(source = VaultSource.Local).sortedByNickname()
+        DiagnosticLogStore.mark("executeSynchronization target=${target.label} mergedEntries=${mergedVault.entries.size}")
+        performLedgerAction(
+            target = target,
+            preStatus = SyncStatus.Loading,
+            preMessage =
+                target.userActionMessage(
+                    "Writing the merged vault to the Ledger and verifying the result.",
+                    "Writing the merged vault to Speculos and verifying the result.",
+                ),
+        ) { client ->
+            val info = client.getAppInfo()
+            if (info.name != EXPECTED_APP_NAME) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.WrongAppOpened,
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    showVerifyCallToAction = false,
+                )
+            }
+            if (target is SyncTarget.Usb && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage =
+                        "Hardware sync blocked: Passwords app ${info.version} is older than " +
+                            "${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}. Update the app on the Ledger before any real write.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    showVerifyCallToAction = false,
+                )
+            }
+            val config = client.getAppConfig()
+            val assessment = assessMergedPushRisk(mergedVault, config.storageSize, target.pushSafetyMode())
+            if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage =
+                        assessment.summaryLines().joinToString(separator = "\n") +
+                            "\nSynchronization stopped before writing. Open Debug to enable the dangerous override if you really want to force the merged hardware write.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    showVerifyCallToAction = false,
+                )
+            }
+            if (!assessment.validation.isValid) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage = assessment.validation.toUserMessage(),
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    showVerifyCallToAction = false,
+                )
+            }
+            if (assessment.decision == PushRiskDecision.Warn || (assessment.decision == PushRiskDecision.Block && hardwareDangerousOverrideEnabled)) {
+                DiagnosticLogStore.warn(
+                    TAG,
+                    "executeSynchronization risk decision=${assessment.decision} override=$hardwareDangerousOverrideEnabled findings=${assessment.summaryLines().joinToString(" | ")}",
+                )
+            }
+
+            val raw = MetadataCodec(config.storageSize).encode(mergedVault)
+            client.loadMetadatas(raw)
+            updateSyncStateFromWorker(
+                SyncUpdate(
+                    status = SyncStatus.Verifying,
+                    statusMessage = target.userActionMessage("Write completed. Verifying Ledger...", "Write completed. Verifying Speculos..."),
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    showVerifyCallToAction = false,
+                ),
+            )
+
+            val deviceVault = metadataCodec.decode(client.dumpMetadatas(config.storageSize)).vault
+            val diff = differ.diff(before = deviceVault, after = mergedVault)
+            if (diff.hasChanges) {
+                return@performLedgerAction SyncUpdate(
+                    status = SyncStatus.ValidationError,
+                    statusMessage = "Synchronization wrote to the target, but verification did not match the merged result.",
+                    appName = info.name,
+                    appVersion = info.version,
+                    storageSize = config.storageSize,
+                    deviceEntries = deviceVault.entries.size,
+                    diffSummary = renderLedgerDiffSummary(diff),
+                    diffLines = renderLedgerDiffLines(diff),
+                    showVerifyCallToAction = false,
+                )
+            }
+
+            SyncUpdate(
+                status = SyncStatus.Success,
+                statusMessage = "Synchronization completed. Local and target now share the merged vault.",
+                appName = info.name,
+                appVersion = info.version,
+                storageSize = config.storageSize,
+                deviceEntries = deviceVault.entries.size,
+                diffSummary = renderLedgerDiffSummary(diff),
+                diffLines = renderLedgerDiffLines(diff),
+                replaceLocalVault = mergedVault,
+                showVerifyCallToAction = false,
+            )
+        }
+    }
+
     private fun pushToLedger() {
         val target = requireCurrentTarget() ?: return
         val localSnapshot = localVault
@@ -1293,6 +1580,16 @@ class MainActivity : ComponentActivity() {
     private fun updateSyncStateFromWorker(update: SyncUpdate) {
         runOnUiThread {
             var statusMessage = update.statusMessage
+            update.deferredSynchronizationPrompt?.let { prompt ->
+                appDialogState =
+                    AppDialogState.ConfirmSynchronization(
+                        title = prompt.title,
+                        body = prompt.body,
+                        confirmLabel = prompt.confirmLabel,
+                        cancelMessage = prompt.cancelMessage,
+                        mergedVault = prompt.mergedVault,
+                    )
+            }
             update.replaceLocalVault?.let { replacement ->
                 val prompt = update.deferredLocalReplacementPrompt
                 if (prompt != null) {
@@ -1464,6 +1761,17 @@ internal sealed interface AppDialogState {
         override val canConfirm: Boolean = true
         override val dismissLabel: String = "Cancel"
     }
+
+    data class ConfirmSynchronization(
+        override val title: String,
+        override val body: String,
+        override val confirmLabel: String,
+        val cancelMessage: String,
+        val mergedVault: Vault,
+    ) : AppDialogState {
+        override val canConfirm: Boolean = true
+        override val dismissLabel: String = "Cancel"
+    }
 }
 
 internal data class EntryEditorState(
@@ -1533,6 +1841,7 @@ internal object UiTags {
     const val SyncSpeculosHost = "sync_speculos_host"
     const val SyncSpeculosPort = "sync_speculos_port"
     const val SyncRefresh = "sync_refresh"
+    const val SyncSynchronize = "sync_synchronize"
     const val SyncPull = "sync_pull"
     const val SyncPush = "sync_push"
     const val SyncVerify = "sync_verify"
