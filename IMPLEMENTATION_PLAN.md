@@ -1,51 +1,51 @@
-# Plan d'implémentation détaillé
+# Detailed implementation plan
 
 ## Vision
 
-Créer une app companion Android pour Ledger Passwords qui gère uniquement les metadata/nicknames. Le Ledger reste l'autorité cryptographique et le seul composant capable de générer/taper les mots de passe finaux.
+Create an Android companion app for Ledger Passwords that only manages metadata/nicknames. The Ledger remains the cryptographic authority and the only component capable of generating/typing final passwords.
 
-Le projet est découpé en trois parties :
+The project is divided into three parts:
 
-1. logique métier pure ;
-2. CLI PC pour tester offline et avec Ledger ;
-3. UI Android simple pour usage quotidien.
+1. pure business logic;
+2. PC CLI for testing offline and with Ledger;
+3. Simple Android UI for daily use.
 
-## Principe fondamental
+## Fundamental principle
 
-L'app Ledger Passwords ne fournit pas d'APDU pour ajouter, supprimer ou modifier une entrée individuellement. Elle expose un dump complet et un load complet des metadata. Les opérations CRUD doivent donc être faites localement sur un modèle métier, puis exportées en réécrivant tout le bloc metadata du Ledger.
+The Ledger Passwords app does not provide APDUs to add, delete, or edit an entry individually. It exposes a complete dump and a complete load of metadata. CRUD operations must therefore be done locally on a business model, then exported by rewriting the entire metadata block of the Ledger.
 
-Conséquence UX importante : renommer un nickname n'est pas un simple changement de libellé. Le nickname participe à la dérivation déterministe du mot de passe côté Ledger. Renommer `gmail` en `google` produira un autre mot de passe.
+Important UX consequence: renaming a nickname is not a simple change of wording. The nickname participates in the deterministic derivation of the password on the Ledger side. Renaming `gmail` to `google` will produce another password.
 
-## Phase 0 — cadrage et socle repo
+## Phase 0 — framing and repo base
 
-Objectifs :
+Objectives:
 
-- créer le repository multi-module ;
-- isoler la logique métier du protocole Ledger ;
-- documenter le format metadata et les flux ;
-- préparer le projet pour Codex.
+- create the multi-module repository;
+- isolate the business logic of the Ledger protocol;
+- document the metadata format and flows;
+- prepare the project for Codex.
 
-Livrables :
+Deliverables:
 
 - `core/` ;
 - `ledger-protocol/` ;
 - `cli/` ;
 - `android-app/` ;
-- docs ;
+- docs;
 - fixtures.
 
-Critères d'acceptation :
+Acceptance criteria:
 
-- le repository s'ouvre dans IntelliJ/Android Studio ;
-- les modules JVM sont indépendants d'Android ;
-- les TODO sont explicites et localisés ;
-- les invariants Ledger sont écrits dans les docs et dans le code.
+- the repository opens in IntelliJ/Android Studio;
+- JVM modules are independent of Android;
+- TODOs are explicit and localized;
+- Ledger invariants are written in the docs and in the code.
 
-## Phase 1 — logique métier pure
+## Phase 1 — pure business logic
 
-Module concerné : `core`.
+Module concerned: `core`.
 
-À implémenter/finaliser :
+To implement/finalize:
 
 - `PasswordIdentifier` ;
 - `CharsetFlag` ;
@@ -55,75 +55,75 @@ Module concerné : `core`.
 - `VaultValidator` ;
 - `VaultDiff`.
 
-Règles :
+Rules:
 
-- nickname non vide ;
-- nickname max `19` octets UTF-8 ;
-- doublons interdits ;
-- charsets entre `0x00` et `0xFF` ;
-- capacité totale <= `storageSize`, par défaut `4096` ;
-- limite prudente de `178` entrées ;
-- les notes locales ne sont jamais exportées vers Ledger.
+- non-empty nickname;
+- nickname max `19` UTF-8 bytes;
+- duplicates prohibited;
+- charsets between `0x00` and `0xFF` ;
+- total capacity <= `storageSize`, default `4096`;
+- conservative limit of `178` entries;
+- local notes are never exported to Ledger.
 
-Tests unitaires requis :
+Required unit tests:
 
-- ajout valide ;
-- doublon rejeté ;
-- nickname vide rejeté ;
-- nickname de 19 octets accepté ;
-- nickname de 20 octets rejeté ;
-- nickname Unicode validé en octets, pas en caractères ;
-- rename averti/documenté ;
+- valid addition;
+- duplicate rejected;
+- empty nickname rejected;
+- nickname of 19 bytes accepted;
+- nickname of 20 bytes rejected;
+- Unicode nickname validated in bytes, not in characters;
+- rename warned/documented;
 - diff added/removed/changed.
 
-## Phase 2 — codec metadata Ledger
+## Phase 2 — Ledger metadata codec
 
-Module concerné : `ledger-protocol`.
+Module concerned: `ledger-protocol`.
 
-À implémenter/finaliser :
+To implement/finalize:
 
 - `MetadataCodec.decode(raw)` ;
 - `MetadataCodec.encode(vault)` ;
-- gestion des entrées actives ;
-- gestion des entrées effacées en mode lecture ;
-- compactage à l'export normal ;
-- conversion charsets bitmask <-> noms ;
-- hex utils ;
+- management of active entries;
+- management of deleted entries in reading mode;
+- compaction during normal export;
+- conversion charsets bitmask <-> names;
+- hex utils;
 - corruption reporting.
 
-Format brut :
+Raw format:
 
 ```text
 [length: 1 byte] [kind: 1 byte] [charsets: 1 byte] [nickname bytes...]
 ```
 
-`length = 1 + nicknameByteLength`, car l'octet charset fait partie de la donnée.
+`length = 1 + nicknameByteLength`, because the charset byte is part of the data.
 
-Tests requis :
+Required tests:
 
-- decode fixture existante ;
-- encode -> decode roundtrip ;
-- raw 4096 bytes avec padding zéro ;
-- entrée effacée `kind=0xFF` visible dans `erasedEntries` ;
-- corruption si `length > 20` ;
-- corruption si offset dépasse la taille du buffer ;
-- export compact sans entries effacées.
+- decode existing fixture;
+- encode -> decode roundtrip;
+- raw 4096 bytes with zero padding;
+- deleted entry `kind=0xFF` visible in `erasedEntries`;
+- corruption if `length > 20`;
+- corruption if offset exceeds the size of the buffer;
+- compact export without deleted entries.
 
-## Phase 3 — backup JSON compatible Ledger Web UI
+## Phase 3 — Ledger Web UI compatible JSON backup
 
-Module concerné : `ledger-protocol`.
+Module concerned: `ledger-protocol`.
 
-À finaliser :
+To be finalized:
 
 - `BackupJsonCodec.fromJson` ;
 - `BackupJsonCodec.toJson` ;
-- compatibilité `parsed` ;
-- compatibilité `nicknames_erased_but_still_stored` ;
-- compatibilité `corruptions_encountered` ;
-- compatibilité `raw_metadatas` ;
-- champs companion additionnels ignorables.
+- `parsed` compatibility;
+- `nicknames_erased_but_still_stored` compatibility;
+- `corruptions_encountered` compatibility;
+- `raw_metadatas` compatibility;
+- additional ignorable companion fields.
 
-Format recommandé :
+Recommended format:
 
 ```json
 {
@@ -139,19 +139,17 @@ Format recommandé :
 }
 ```
 
-Tests requis :
+Required tests:
 
-- import d'un backup d'exemple ;
-- export lisible ;
-- unknown keys ignorées ;
-- `ALL_SETS` reconnu ;
-- JSON -> Vault -> raw -> JSON stable au niveau fonctionnel.
+- import of an example backup;
+- readable export;
+- unknown keys ignored;
+- `ALL_SETS` recognized;
+- JSON -> Vault -> raw -> functionally stable JSON.## Phase 4 — APDU client and fake transport
 
-## Phase 4 — client APDU et fake transport
+Module concerned: `ledger-protocol`.
 
-Module concerné : `ledger-protocol`.
-
-À implémenter/finaliser :
+To implement/finalize:
 
 - `LedgerTransport` ;
 - `ApduResponse` ;
@@ -161,38 +159,38 @@ Module concerné : `ledger-protocol`.
 - `LedgerPasswordsClient.loadMetadatas(raw)` ;
 - `FakeLedgerTransport`.
 
-APDU à supporter :
+APDU to support:
 
 | Action | CLA | INS | P1 | P2 | Data |
 |---|---:|---:|---:|---:|---|
-| App info | `0xB0` | `0x01` | `0x00` | `0x00` | vide |
-| Config | `0xE0` | `0x03` | `0x00` | `0x00` | vide |
-| Dump | `0xE0` | `0x04` | `0x00` | `0x00` | vide |
-| Load chunk | `0xE0` | `0x05` | `0x00` ou `0xFF` | `0x00` | chunk <= 255 |
+| App info | `0xB0` | `0x01` | `0x00` | `0x00` | empty |
+| Config | `0xE0` | `0x03` | `0x00` | `0x00` | empty |
+| Dump | `0xE0` | `0x04` | `0x00` | `0x00` | empty |
+| Load chunk | `0xE0` | `0x05` | `0x00` or `0xFF` | `0x00` | chunk <= 255 |
 
-Status words :
+Status words:
 
-- `0x9000` : succès ;
-- `0x6985` : action annulée ;
-- `0x6A86` : mauvais P1/P2 ;
-- `0x6A87` : mauvaise longueur ;
-- `0x6D00` : INS non supportée ;
-- `0x6E00` : CLA non supportée ;
-- `0x6F10` : erreur de parsing metadata.
+- `0x9000`: success;
+- `0x6985`: action canceled;
+- `0x6A86`: bad P1/P2;
+- `0x6A87`: wrong length;
+- `0x6D00`: INS not supported;
+- `0x6E00`: CLA not supported;
+- `0x6F10`: metadata parsing error.
 
-Tests requis :
+Required tests:
 
 - fake `getAppInfo` ;
 - fake `getAppConfig` ;
-- fake dump 4096 bytes par chunks ;
-- fake load 4096 bytes par chunks de 255 ;
-- load puis dump identique.
+- fake dump 4096 bytes per chunk;
+- fake load 4096 bytes in chunks of 255;
+- load then dump identical.
 
-## Phase 5 — CLI offline
+## Phase 5 — offline CLI
 
-Module concerné : `cli`.
+Module concerned: `cli`.
 
-Commandes MVP :
+MVP commands:
 
 ```bash
 ledger-pw help
@@ -205,23 +203,23 @@ ledger-pw file edit backup.json github --charset all --out backup2.json
 ledger-pw file export-raw backup.json --out metadata.bin
 ```
 
-Critères d'acceptation :
+Acceptance criteria:
 
-- aucune connexion Ledger nécessaire ;
-- erreurs lisibles ;
-- `--out` obligatoire pour éviter d'écraser par accident ;
-- sortie table simple ;
-- option JSON machine-readable à ajouter plus tard.
+- no Ledger connection required;
+- readable errors;
+- `--out` mandatory to avoid overwriting by accident;
+- simple table output;
+- JSON machine-readable option to add later.
 
-## Phase 6 — CLI avec device réel ou émulateur
+## Phase 6 — CLI with real device or emulator
 
-Transport à ajouter :
+Transportation to add:
 
-- `SpeculosTransport` pour tests fonctionnels ;
-- `PcHidLedgerTransport` pour vrai Ledger USB/HID ;
-- éventuellement transport via une lib Ledger JS/Java existante si le choix est validé.
+- `SpeculosTransport` for functional tests;
+- `PcHidLedgerTransport` for real Ledger USB/HID;
+- possibly transport via an existing Ledger JS/Java lib if the choice is validated.
 
-Commandes :
+Commands:
 
 ```bash
 ledger-pw device info
@@ -231,122 +229,120 @@ ledger-pw device diff backup.json
 ledger-pw device verify backup.json
 ```
 
-Flow `push` :
+Flow `push`:
 
-1. lire backup JSON ;
-2. valider ;
-3. connecter Ledger ;
-4. vérifier app name = `Passwords` ;
-5. lire config ;
-6. encoder raw ;
-7. dumper device pour diff ;
-8. demander confirmation CLI ;
-9. envoyer `LOAD_METADATAS` par chunks ;
-10. relire le device ;
-11. comparer raw attendu vs raw relu.
+1. read backup JSON;
+2. validate;
+3. connect Ledger;
+4. check app name = `Passwords`;
+5. read config;
+6. encode raw;
+7. dumper device for diff;
+8. request CLI confirmation;
+9. send `LOAD_METADATAS` in chunks;
+10. reread the device;
+11. compare raw expected vs raw reread.
 
 ## Phase 7 — Android MVP offline
 
-Module concerné : `android-app`.
+Module concerned: `android-app`.
 
-Écrans :
+Screens:
 
-- `HomeScreen` ;
-- `IdentifierListScreen` ;
+- `HomeScreen`;
+- `IdentifierListScreen`;
 - `EditIdentifierScreen` ;
 - `ImportExportScreen` ;
-- `SettingsScreen` minimal.
+- `SettingsScreen` minimum.
 
-Fonctions :
+Functions:
 
-- stockage local interne ;
-- import/export JSON via Storage Access Framework ;
-- liste + recherche ;
-- add/delete/edit/rename ;
-- validation inline ;
-- avertissement rename.
+- internal local storage;
+- import/export JSON via Storage Access Framework;
+- list + search;
+- add/delete/edit/rename;
+- inline validation;
+- rename warning.
 
-Critères d'acceptation :
+Acceptance criteria:
 
-- utilisable sans Ledger ;
-- aucune permission réseau ;
-- pas de telemetry ;
-- backup exporté explicitement par l'utilisateur.
+- usable without Ledger;
+- no network permissions;
+- no telemetry;
+- backup exported explicitly by the user.
 
 ## Phase 8 — Android USB Ledger
 
-À implémenter :
+To implement:
 
 - `AndroidUsbLedgerTransport` ;
-- détection USB host ;
-- permission Android ;
-- claim interface ;
-- endpoints IN/OUT ;
-- framing APDU Ledger HID ;
-- écran sync ;
-- pull ;
-- push ;
-- verify post-push ;
-- gestion déconnexion.
+- USB host detection;
+- Android permission;
+- claim interface;
+- IN/OUT endpoints;
+- framing APDU Ledger HID;
+- sync screen;
+- sweater;
+- push;
+- verify post-push;
+- disconnection management.
 
-Flow pull :
+Flow pull:
 
-1. Ledger branché ;
-2. app Passwords ouverte ;
-3. Android demande permission USB ;
-4. `getAppInfo` ;
-5. `getAppConfig` ;
-6. `dumpMetadatas` ;
-7. Ledger demande approbation ;
-8. parse + affiche diff/remplacement.
+1. Ledger plugged in;
+2. open Passwords app;
+3. Android asks USB permission;
+4. `getAppInfo`;
+5. `getAppConfig`;
+6. `dumpMetadatas`;
+7. Ledger requests approval;
+8. parse + print diff/replace.
 
-Flow push :
+Flow push:
 
-1. backup automatique local ;
-2. diff local vs device ;
-3. confirmation Android ;
-4. Ledger demande approbation ;
-5. upload chunks ;
-6. verify par dump ;
-7. succès ou rollback manuel via backup.
+1. local automatic backup;
+2. diff local vs device;
+3. Android confirmation;
+4. Ledger requests approval;
+5. upload chunks;
+6. verify by dump;
+7. success or manual rollback via backup.## Phase 9 — hardening
 
-## Phase 9 — durcissement
+To test:
 
-À tester :
+-Nano S;
+- Nano S Plus;
+- Nano X in USB;
+- OTG cable;
+- refusal of USB permission;
+- Ledger app not open;
+- action canceled on Ledger;
+- disconnection during dump;
+- disconnection during load;
+- corrupted backup;
+- name too long;
+- full storage;
+- Unicode;
+- custom chariots.
 
-- Nano S ;
-- Nano S Plus ;
-- Nano X en USB ;
-- câble OTG ;
-- refus de permission USB ;
-- app Ledger non ouverte ;
-- action annulée sur Ledger ;
-- déconnexion pendant dump ;
-- déconnexion pendant load ;
-- backup corrompu ;
-- nom trop long ;
-- stockage plein ;
-- Unicode ;
-- charsets custom.
+To add:
 
-À ajouter :
+- crash-safe local backups;
+- redacted logs;
+- test instrumentation;
+- validation screenshots;
+- CI GitHub Actions;
+- locally signed debug release.
 
-- crash-safe local backups ;
-- logs expurgés ;
-- instrumentation tests ;
-- screenshots de validation ;
-- CI GitHub Actions ;
-- release debug signée localement.
+## Excluding MVP
 
-## Hors MVP
+What not to do at the start:
 
-À ne pas faire au départ :
-
-- génération/affichage de mots de passe sur Android ;
-- stockage de secrets ;
-- cloud sync ;
-- autofill Android ;
-- BLE ;
-- multi-vault complexe ;
-- sync automatique sans diff ;
-- telemetry contenant les nicknames.
+- generation/display of passwords on Android;
+- storage of secrets;
+- cloud sync;
+- Android autofill;
+- WHEAT ;
+- complex multi-vault;
+- automatic sync without diff;
+- telemetry containing nicknames.

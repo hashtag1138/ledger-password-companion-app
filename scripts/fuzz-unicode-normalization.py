@@ -51,7 +51,7 @@ class UnicodeCase:
 CASES: tuple[UnicodeCase, ...] = (
     UnicodeCase(
         case_id="nfc_nfd_delete_second",
-        note="NFC/NFD visuellement proches, suppression ciblée du second item",
+        note="Visually close NFC/NFD, targeted deletion of the second item",
         entries=(
             SeedEntry("é"),
             SeedEntry("e\u0301"),
@@ -67,7 +67,7 @@ CASES: tuple[UnicodeCase, ...] = (
     ),
     UnicodeCase(
         case_id="nbsp_delete_second",
-        note="Espace ASCII vs NBSP, suppression ciblée du second item",
+        note="ASCII space vs NBSP, targeted deletion of the second item",
         entries=(
             SeedEntry("foo bar"),
             SeedEntry("foo\u00a0bar"),
@@ -83,7 +83,7 @@ CASES: tuple[UnicodeCase, ...] = (
     ),
     UnicodeCase(
         case_id="zero_width_delete_second",
-        note="Nom visible vs nom avec zero-width space, suppression du second item",
+        note="Visible nickname vs nickname with a zero-width space, delete the second item",
         entries=(
             SeedEntry("zerowidth"),
             SeedEntry("zero\u200bwidth"),
@@ -99,7 +99,7 @@ CASES: tuple[UnicodeCase, ...] = (
     ),
     UnicodeCase(
         case_id="bidi_delete_second",
-        note="Nom ASCII vs nom avec bidi override, suppression du second item",
+        note="ASCII nickname vs nickname with bidi override, delete the second item",
         entries=(
             SeedEntry("abc123"),
             SeedEntry("abc\u202e123"),
@@ -115,7 +115,7 @@ CASES: tuple[UnicodeCase, ...] = (
     ),
     UnicodeCase(
         case_id="mixed_unicode_show_all",
-        note="Liste mixte Unicode: show first/middle/last puis type sur un item avec zero-width joiner",
+        note="Mixed Unicode list: show first/middle/last, then type on an item with a zero-width joiner",
         entries=(
             SeedEntry("é"),
             SeedEntry("e\u0301"),

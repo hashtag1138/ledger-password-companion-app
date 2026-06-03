@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
     private val importBackupLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) {
-                localVaultMessage = "Import backup.json annulé."
+                localVaultMessage = "Import backup.json cancelled."
             } else {
                 importBackupFromUri(uri)
             }
@@ -98,14 +98,14 @@ class MainActivity : ComponentActivity() {
     private val exportBackupLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri == null) {
-                localVaultMessage = "Export backup.json annulé."
+                localVaultMessage = "Export backup.json cancelled."
             } else {
                 exportBackupToUri(uri)
             }
         }
 
     private var localVault by mutableStateOf(Vault(source = VaultSource.Local))
-    private var localVaultMessage by mutableStateOf("Chargement du stockage local...")
+    private var localVaultMessage by mutableStateOf("Loading local storage...")
     private var localBackupJsonText by mutableStateOf<String?>(null)
     private var showSyncScreen by mutableStateOf(false)
     private var showSettingsScreen by mutableStateOf(false)
@@ -138,7 +138,7 @@ class MainActivity : ComponentActivity() {
                             updateSyncState {
                                 copy(
                                     status = SyncStatus.CancelledByUser,
-                                    statusMessage = "Permission USB refusée pour ${device.productName ?: device.deviceName}",
+                                    statusMessage = "USB permission denied for ${device.productName ?: device.deviceName}",
                                 )
                             }
                         }
@@ -162,7 +162,7 @@ class MainActivity : ComponentActivity() {
                             syncUiState =
                                 syncUiState.copy(
                                     status = SyncStatus.Idle,
-                                    statusMessage = "Ledger déconnecté. Rebranche le device et ouvre l'app Passwords.",
+                                    statusMessage = "Ledger disconnected. Reconnect the device and open the Passwords app.",
                                     deviceName = null,
                                     appName = null,
                                     appVersion = null,
@@ -243,8 +243,8 @@ class MainActivity : ComponentActivity() {
                         SyncUiState(
                             statusMessage =
                                 when (mode) {
-                                    SyncTransportMode.Usb -> "Branche un Ledger et ouvre l'app Passwords."
-                                    SyncTransportMode.Speculos -> "Configure Speculos puis rafraîchis la cible."
+                                    SyncTransportMode.Usb -> "Connect a Ledger and open the Passwords app."
+                                    SyncTransportMode.Speculos -> "Configure Speculos then refresh the target."
                                 },
                         )
                     refreshSelectedTransport(preferredDevice = intent.usbDeviceOrNull(), autoRequestPermission = false)
@@ -390,7 +390,7 @@ class MainActivity : ComponentActivity() {
                                 severity = PushRiskSeverity.Block,
                                 code = "local_backup_unreadable",
                                 message =
-                                    "Le backup brut local n'a pas pu être relu: ${error.message ?: error::class.java.simpleName}.",
+                                    "The local raw backup could not be re-read: ${error.message ?: error::class.java.simpleName}.",
                             ),
                         )
                 },
@@ -409,7 +409,7 @@ class MainActivity : ComponentActivity() {
             findings += PushRiskFinding(
                 severity = severity,
                 code = "local_state_backup_mismatch",
-                message = "L'état local affiché ne correspond pas exactement au backup brut conservé.",
+                message = "The displayed local state does not exactly match the preserved raw backup.",
             )
         }
         return LedgerPushRiskPolicy(storageSize).assess(normalizedVault, mode, findings)
@@ -418,26 +418,26 @@ class MainActivity : ComponentActivity() {
     private fun buildPushConfirmationDialogState(): PushConfirmationDialogState {
         val assessment = assessLocalPushRisk(localVault, effectiveStorageSize(), PushSafetyMode.HardwareSafe)
         val baseIntro =
-            "Cette action écrit sur un vrai Ledger. Aucun readback automatique ne sera lancé après l'écriture."
+            "This action writes to a real Ledger. No automatic readback will run after writing."
         val diffContext =
-            syncUiState.diffSummary?.let { "Dernier diff connu : $it." }
-                ?: "Aucun diff récent affiché. Lance \"Comparer le local avec la cible\" si tu veux prévisualiser précisément les changements."
+            syncUiState.diffSummary?.let { "Last known diff: $it." }
+                ?: "No recent diff shown. Run \"Compare local with target\" if you want a precise preview of the changes."
         return when (assessment.decision) {
             PushRiskDecision.Allow ->
                 PushConfirmationDialogState(
-                    title = "Confirmer le push matériel",
-                    body = "$baseIntro\n\n$diffContext\n\nAucun risque additionnel détecté par la policy companion.",
+                    title = "Confirm hardware push",
+                    body = "$baseIntro\n\n$diffContext\n\nNo additional risk detected by the companion policy.",
                     canConfirm = true,
                 )
             PushRiskDecision.Warn ->
                 PushConfirmationDialogState(
-                    title = "Confirmer le push matériel",
+                    title = "Confirm hardware push",
                     body = "$baseIntro\n\n$diffContext\n\n${assessment.summaryLines().joinToString(separator = "\n")}",
                     canConfirm = true,
                 )
             PushRiskDecision.Block ->
                 PushConfirmationDialogState(
-                    title = if (hardwareDangerousOverrideEnabled) "Override dangereux actif" else "Push matériel bloqué",
+                    title = if (hardwareDangerousOverrideEnabled) "Dangerous override enabled" else "Hardware push blocked",
                     body =
                         buildString {
                             append(baseIntro)
@@ -447,13 +447,13 @@ class MainActivity : ComponentActivity() {
                             append(assessment.summaryLines().joinToString(separator = "\n"))
                             append("\n\n")
                             if (hardwareDangerousOverrideEnabled) {
-                                append("L'override dangereux est actif dans Debug. Tu peux forcer ce push malgré ces blocages.")
+                                append("The dangerous override is enabled in Debug. You can force this push despite these blocks.")
                             } else {
-                                append("Le push réel est bloqué par la policy hardware-safe. Ouvre Debug pour activer l'override dangereux si tu veux vraiment forcer l'écriture.")
+                                append("Real push is blocked by the hardware-safe policy. Open Debug to enable the dangerous override if you really want to force the write.")
                             }
                         },
                     canConfirm = hardwareDangerousOverrideEnabled,
-                    confirmLabel = "Forcer le push",
+                    confirmLabel = "Force push",
                 )
         }
     }
@@ -466,7 +466,7 @@ class MainActivity : ComponentActivity() {
     private fun dismissAppDialog() {
         when (val dialog = appDialogState) {
             is AppDialogState.ConfirmBackupImport -> {
-                localVaultMessage = "Import de ${dialog.fileName} annulé. Le vault local n'a pas été modifié."
+                localVaultMessage = "Import of ${dialog.fileName} cancelled. The local vault was not modified."
             }
 
             is AppDialogState.ConfirmLedgerImport -> {
@@ -521,7 +521,7 @@ class MainActivity : ComponentActivity() {
                             if (persistence.persisted) {
                                 dialog.confirmedStatusMessage
                             } else {
-                                "${dialog.confirmedStatusMessage} Le remplacement local n'a pas pu être persisté."
+                                "${dialog.confirmedStatusMessage} The local replacement could not be persisted."
                             },
                     )
             }
@@ -540,13 +540,13 @@ class MainActivity : ComponentActivity() {
     private fun applyBackupImport(dialog: AppDialogState.ConfirmBackupImport) {
         val suffix =
             if (dialog.hasRiskFindings) {
-                " Certaines écritures matérielles seront bloquées tant que ce backup n'aura pas été normalisé."
+                " Some hardware writes will be blocked until this backup has been normalized."
             } else {
                 ""
             }
         applyLocalVault(
             vault = dialog.importedVault,
-            successMessage = "Vault local importé depuis ${dialog.fileName}.$suffix",
+            successMessage = "Local vault imported from ${dialog.fileName}.$suffix",
             backupJsonText = dialog.backupJsonText,
         )
     }
@@ -559,7 +559,7 @@ class MainActivity : ComponentActivity() {
         val byteCount = candidate.trim().toByteArray(Charsets.UTF_8).size
         val error =
             if (byteCount > LedgerPasswordsLimits.MAX_NICKNAME_BYTES) {
-                "Le nickname dépasse ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} octets UTF-8."
+                "Nickname exceeds ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} UTF-8 bytes."
             } else {
                 null
             }
@@ -573,17 +573,17 @@ class MainActivity : ComponentActivity() {
         val draft = entryEditorState ?: return
         val nickname = draft.nickname.trim()
         if (nickname.isBlank()) {
-            updateEntryEditor { copy(errorMessage = "Le nickname ne doit pas être vide.") }
+            updateEntryEditor { copy(errorMessage = "Nickname must not be blank.") }
             return
         }
         if (draft.nicknameByteCount > LedgerPasswordsLimits.MAX_NICKNAME_BYTES) {
             updateEntryEditor {
-                copy(errorMessage = "Le nickname dépasse ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} octets UTF-8.")
+                copy(errorMessage = "Nickname exceeds ${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} UTF-8 bytes.")
             }
             return
         }
         if (draft.selectedFlags.isEmpty()) {
-            updateEntryEditor { copy(errorMessage = "Sélectionne au moins un charset.") }
+            updateEntryEditor { copy(errorMessage = "Select at least one charset.") }
             return
         }
 
@@ -607,16 +607,16 @@ class MainActivity : ComponentActivity() {
                     vault = nextVault,
                     successMessage =
                         when {
-                            draft.originalNickname == null -> "Identifiant ajouté et sauvegardé localement."
-                            draft.originalNickname == nickname -> "Identifiant mis à jour et sauvegardé localement."
-                            else -> "Identifiant renommé et sauvegardé localement."
+                            draft.originalNickname == null -> "Identifier added and saved locally."
+                            draft.originalNickname == nickname -> "Identifier updated and saved locally."
+                            else -> "Identifier renamed and saved locally."
                         },
                 )
                 entryEditorState = null
             }
             .onFailure { error ->
                 updateEntryEditor {
-                    copy(errorMessage = error.message ?: "Impossible d'enregistrer cet identifiant.")
+                    copy(errorMessage = error.message ?: "Unable to save this identifier.")
                 }
             }
     }
@@ -627,13 +627,13 @@ class MainActivity : ComponentActivity() {
             .onSuccess { nextVault ->
                 applyLocalVault(
                     vault = nextVault,
-                    successMessage = "Identifiant supprimé et stockage local mis à jour.",
+                    successMessage = "Identifier deleted and local storage updated.",
                 )
                 entryEditorState = null
             }
             .onFailure { error ->
                 updateEntryEditor {
-                    copy(errorMessage = error.message ?: "Impossible de supprimer cet identifiant.")
+                    copy(errorMessage = error.message ?: "Unable to delete this identifier.")
                 }
             }
     }
@@ -661,7 +661,7 @@ class MainActivity : ComponentActivity() {
         runCatching {
             val text =
                 contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                    ?: error("Impossible de lire $fileName.")
+                    ?: error("Unable to read $fileName.")
             val inspection = backupJsonCodec.inspect(text)
             val importedVault = inspection.preferredVault.copy(source = VaultSource.Local).sortedByNickname()
             val validation = validatorFor().validate(importedVault)
@@ -674,7 +674,7 @@ class MainActivity : ComponentActivity() {
                         backupJsonText = text,
                         hasRiskFindings = inspection.findings.isNotEmpty(),
                     )
-                localVaultMessage = "Import de $fileName prêt. Confirme le remplacement du vault local."
+                localVaultMessage = "Import of $fileName is ready. Confirm replacement of the local vault."
             } else {
                 applyBackupImport(
                     AppDialogState.ConfirmBackupImport(
@@ -686,7 +686,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }.onFailure { error ->
-            localVaultMessage = error.message ?: "Import backup.json impossible."
+            localVaultMessage = error.message ?: "Unable to import backup.json."
         }
     }
 
@@ -702,11 +702,11 @@ class MainActivity : ComponentActivity() {
             val json = localBackupJsonText ?: backupJsonCodec.toJson(localVault.copy(source = VaultSource.Local))
             val output =
                 contentResolver.openOutputStream(uri)
-                    ?: error("Impossible d'ouvrir $fileName en écriture.")
+                    ?: error("Unable to open $fileName for writing.")
             output.bufferedWriter(Charsets.UTF_8).use { it.write(json) }
-            localVaultMessage = "Backup exporté vers $fileName."
+            localVaultMessage = "Backup exported to $fileName."
         }.onFailure { error ->
-            localVaultMessage = error.message ?: "Export backup.json impossible."
+            localVaultMessage = error.message ?: "Unable to export backup.json."
         }
     }
 
@@ -731,7 +731,7 @@ class MainActivity : ComponentActivity() {
             if (persisted) {
                 successMessage
             } else {
-                "$successMessage Le fichier local n'a pas pu être persisté."
+                "$successMessage The local file could not be persisted."
             }
         localVaultMessage = message
         return LocalPersistenceResult(persisted = persisted)
@@ -761,7 +761,7 @@ class MainActivity : ComponentActivity() {
             syncUiState =
                 syncUiState.copy(
                     status = SyncStatus.Idle,
-                    statusMessage = "Aucun Ledger détecté. Branche le device et ouvre l'app Passwords.",
+                    statusMessage = "No Ledger detected. Connect the device and open the Passwords app.",
                     deviceName = null,
                     appName = null,
                     appVersion = null,
@@ -784,9 +784,9 @@ class MainActivity : ComponentActivity() {
                 status = if (hasPermission) SyncStatus.DeviceConnected else SyncStatus.UsbPermissionRequired,
                 statusMessage =
                     if (hasPermission) {
-                        "Ledger détecté. Tu peux importer, comparer ou exporter."
+                        "Ledger detected. You can import, compare, or export."
                     } else {
-                        "Permission USB requise pour accéder au Ledger."
+                        "USB permission required to access the Ledger."
                     },
                 deviceName = device.deviceName,
                 showVerifyCallToAction = false,
@@ -804,7 +804,7 @@ class MainActivity : ComponentActivity() {
         syncUiState =
             syncUiState.copy(
                 status = SyncStatus.DeviceConnected,
-                statusMessage = "Connexion à Speculos en cours...",
+                statusMessage = "Connecting to Speculos...",
                 deviceName = endpoint.label,
                 showVerifyCallToAction = false,
             )
@@ -816,7 +816,7 @@ class MainActivity : ComponentActivity() {
             updateSyncState {
                 copy(
                     status = SyncStatus.DeviceConnected,
-                    statusMessage = "Aucune permission USB requise en mode Speculos.",
+                    statusMessage = "No USB permission required in Speculos mode.",
                     deviceName = currentSpeculosEndpoint()?.label ?: syncUiState.deviceName,
                     showVerifyCallToAction = false,
                 )
@@ -827,7 +827,7 @@ class MainActivity : ComponentActivity() {
             updateSyncState {
                 copy(
                     status = SyncStatus.Idle,
-                    statusMessage = "Aucun Ledger détecté pour la demande de permission.",
+                    statusMessage = "No Ledger detected for the permission request.",
                     showVerifyCallToAction = false,
                 )
             }
@@ -842,7 +842,7 @@ class MainActivity : ComponentActivity() {
         updateSyncState {
             copy(
                 status = SyncStatus.UsbPermissionRequired,
-                statusMessage = "Android attend ta décision pour la permission USB.",
+                statusMessage = "Android is waiting for your USB permission decision.",
                 deviceName = device.deviceName,
                 showVerifyCallToAction = false,
             )
@@ -856,15 +856,15 @@ class MainActivity : ComponentActivity() {
             preStatus = SyncStatus.DeviceConnected,
             preMessage =
                 when (target) {
-                    is SyncTarget.Usb -> "Lecture des informations du Ledger..."
-                    is SyncTarget.Speculos -> "Lecture des informations de Speculos..."
+                    is SyncTarget.Usb -> "Reading Ledger information..."
+                    is SyncTarget.Speculos -> "Reading Speculos information..."
                 },
         ) { client ->
             val info = client.getAppInfo()
             if (info.name != EXPECTED_APP_NAME) {
                 SyncUpdate(
                     status = SyncStatus.WrongAppOpened,
-                    statusMessage = "App ouverte sur la cible : ${info.name}. Ouvre Passwords.",
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
                     appName = info.name,
                     appVersion = info.version,
                     clearDeviceEntries = true,
@@ -876,7 +876,7 @@ class MainActivity : ComponentActivity() {
                 val config = client.getAppConfig()
                 val compatibilityNotice =
                     if (target is SyncTarget.Usb && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
-                        " Lecture seule recommandée tant que l'app Passwords n'est pas mise à jour en ${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}+."
+                        " Read-only is recommended until the Passwords app is updated to ${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}+."
                     } else {
                         ""
                     }
@@ -884,8 +884,8 @@ class MainActivity : ComponentActivity() {
                     status = SyncStatus.DeviceConnected,
                     statusMessage =
                         when (target) {
-                            is SyncTarget.Usb -> "Ledger connecté, app Passwords ${info.version} ouverte.$compatibilityNotice"
-                            is SyncTarget.Speculos -> "Speculos connecté, app Passwords ${info.version} ouverte."
+                            is SyncTarget.Usb -> "Ledger connected, Passwords app ${info.version} open.$compatibilityNotice"
+                            is SyncTarget.Speculos -> "Speculos connected, Passwords app ${info.version} open."
                         },
                     appName = info.name,
                     appVersion = info.version,
@@ -906,13 +906,13 @@ class MainActivity : ComponentActivity() {
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.WaitingForLedgerApproval,
-            preMessage = target.userActionMessage("Valide l'import sur le Ledger.", "Import depuis Speculos en cours..."),
+            preMessage = target.userActionMessage("Approve the import on the Ledger.", "Importing from Speculos..."),
         ) { client ->
             val info = client.getAppInfo()
             if (info.name != EXPECTED_APP_NAME) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.WrongAppOpened,
-                    statusMessage = "App ouverte sur la cible : ${info.name}. Ouvre Passwords.",
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
                     appName = info.name,
                     appVersion = info.version,
                     showVerifyCallToAction = false,
@@ -922,7 +922,7 @@ class MainActivity : ComponentActivity() {
             updateSyncStateFromWorker(
                 SyncUpdate(
                     status = SyncStatus.Dumping,
-                    statusMessage = "Lecture des metadata en cours...",
+                    statusMessage = "Reading metadata...",
                     appName = info.name,
                     appVersion = info.version,
                     storageSize = config.storageSize,
@@ -937,9 +937,9 @@ class MainActivity : ComponentActivity() {
                 status = SyncStatus.Success,
                 statusMessage =
                     if (requiresConfirmation) {
-                        "Import lu depuis la cible. Confirme le remplacement du vault local."
+                        "Import read from the target. Confirm replacement of the local vault."
                     } else {
-                        target.userActionMessage("Import terminé depuis le Ledger.", "Import terminé depuis la cible de test.")
+                        target.userActionMessage("Import completed from Ledger.", "Import completed from the test target.")
                     },
                 appName = info.name,
                 appVersion = info.version,
@@ -952,18 +952,18 @@ class MainActivity : ComponentActivity() {
                 deferredLocalReplacementPrompt =
                     if (requiresConfirmation) {
                         DeferredLocalReplacementPrompt(
-                            title = "Remplacer le vault local ?",
+                            title = "Replace local vault?",
                             body =
                                 buildString {
-                                    append("La cible contient ${decoded.vault.entries.size} identifiant")
+                                    append("The target contains ${decoded.vault.entries.size} identifier")
                                     if (decoded.vault.entries.size > 1) append('s')
                                     append(". ")
-                                    append("Le vault local actuel en contient ${localSnapshot.entries.size}. ")
-                                    append("Cette action remplacera l'état local sauvegardé sur le téléphone.")
+                                    append("The current local vault contains ${localSnapshot.entries.size}. ")
+                                    append("This action will replace the local state saved on the phone.")
                                 },
-                            confirmLabel = "Remplacer le local",
-                            cancelMessage = "Import lu depuis la cible, mais le vault local n'a pas été remplacé.",
-                            successMessage = "Vault local remplacé depuis la cible.",
+                            confirmLabel = "Replace local",
+                            cancelMessage = "Import read from the target, but the local vault was not replaced.",
+                            successMessage = "Local vault replaced from the target.",
                         )
                     } else {
                         null
@@ -980,13 +980,13 @@ class MainActivity : ComponentActivity() {
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.WaitingForLedgerApproval,
-            preMessage = target.userActionMessage("Valide la lecture pour comparer avec le Ledger.", "Lecture de Speculos pour comparaison..."),
+            preMessage = target.userActionMessage("Approve the read to compare with the Ledger.", "Reading from Speculos for comparison..."),
         ) { client ->
             val info = client.getAppInfo()
             if (info.name != EXPECTED_APP_NAME) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.WrongAppOpened,
-                    statusMessage = "App ouverte sur la cible : ${info.name}. Ouvre Passwords.",
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
                     appName = info.name,
                     appVersion = info.version,
                     showVerifyCallToAction = false,
@@ -996,7 +996,7 @@ class MainActivity : ComponentActivity() {
             updateSyncStateFromWorker(
                 SyncUpdate(
                     status = SyncStatus.Dumping,
-                    statusMessage = "Lecture des metadata en cours...",
+                    statusMessage = "Reading metadata...",
                     appName = info.name,
                     appVersion = info.version,
                     storageSize = config.storageSize,
@@ -1007,7 +1007,7 @@ class MainActivity : ComponentActivity() {
             val diff = differ.diff(before = deviceVault, after = localSnapshot)
             SyncUpdate(
                 status = SyncStatus.Success,
-                statusMessage = "Comparaison terminée.",
+                statusMessage = "Comparison completed.",
                 appName = info.name,
                 appVersion = info.version,
                 storageSize = config.storageSize,
@@ -1029,7 +1029,7 @@ class MainActivity : ComponentActivity() {
                     status = SyncStatus.ValidationError,
                     statusMessage =
                         localAssessment.summaryLines().joinToString(separator = "\n") +
-                            "\nOuvre Debug pour activer l'override dangereux si tu veux vraiment forcer ce push matériel.",
+                            "\nOpen Debug to enable the dangerous override if you really want to force this hardware push.",
                     showVerifyCallToAction = false,
                 )
             return
@@ -1048,16 +1048,16 @@ class MainActivity : ComponentActivity() {
             target = target,
             preStatus = SyncStatus.Loading,
             preMessage = target.userActionMessage(
-                "Écriture vers le Ledger en cours. Valide une seule fois sur le device. " +
-                    "Aucune vérification automatique ne sera lancée après le push.",
-                "Écriture vers Speculos en cours.",
+                "Writing to the Ledger. Approve only once on the device. " +
+                    "No automatic verification will run after the push.",
+                "Writing to Speculos.",
             ),
         ) { client ->
             val info = client.getAppInfo()
             if (info.name != EXPECTED_APP_NAME) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.WrongAppOpened,
-                    statusMessage = "App ouverte sur la cible : ${info.name}. Ouvre Passwords.",
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
                     appName = info.name,
                     appVersion = info.version,
                     showVerifyCallToAction = false,
@@ -1067,9 +1067,9 @@ class MainActivity : ComponentActivity() {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.ValidationError,
                     statusMessage =
-                        "Push matériel bloqué: l'app Passwords ${info.version} est antérieure à " +
-                            "${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}. Mets à jour l'app sur le Ledger " +
-                            "avant toute écriture réelle.",
+                        "Hardware push blocked: Passwords app ${info.version} is older than " +
+                            "${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}. Update the app on the Ledger " +
+                            "before any real write.",
                     appName = info.name,
                     appVersion = info.version,
                     clearDeviceEntries = true,
@@ -1085,7 +1085,7 @@ class MainActivity : ComponentActivity() {
                     status = SyncStatus.ValidationError,
                     statusMessage =
                         deviceAssessment.summaryLines().joinToString(separator = "\n") +
-                            "\nOuvre Debug pour activer l'override dangereux si tu veux vraiment forcer ce push matériel.",
+                            "\nOpen Debug to enable the dangerous override if you really want to force this hardware push.",
                     appName = info.name,
                     appVersion = info.version,
                     storageSize = config.storageSize,
@@ -1115,11 +1115,11 @@ class MainActivity : ComponentActivity() {
                 status = SyncStatus.Success,
                 statusMessage = target.userActionMessage(
                     if (hardwareDangerousOverrideEnabled && deviceAssessment.decision == PushRiskDecision.Block) {
-                        "Push envoyé vers le Ledger avec override dangereux. Aucun readback automatique n'a été exécuté après l'écriture."
+                        "Push sent to the Ledger with dangerous override. No automatic readback was performed after writing."
                     } else {
-                        "Push envoyé vers le Ledger. Aucun readback automatique n'a été exécuté après l'écriture."
+                        "Push sent to the Ledger. No automatic readback was performed after writing."
                     },
-                    "Push envoyé vers Speculos.",
+                    "Push sent to Speculos.",
                 ),
                 appName = info.name,
                 appVersion = info.version,
@@ -1139,13 +1139,13 @@ class MainActivity : ComponentActivity() {
         performLedgerAction(
             target = target,
             preStatus = SyncStatus.Verifying,
-            preMessage = target.userActionMessage("Vérification du Ledger en cours...", "Vérification de Speculos en cours..."),
+            preMessage = target.userActionMessage("Verifying Ledger...", "Verifying Speculos..."),
         ) { client ->
             val info = client.getAppInfo()
             if (info.name != EXPECTED_APP_NAME) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.WrongAppOpened,
-                    statusMessage = "App ouverte sur la cible : ${info.name}. Ouvre Passwords.",
+                    statusMessage = "App open on target: ${info.name}. Open Passwords.",
                     appName = info.name,
                     appVersion = info.version,
                     showVerifyCallToAction = false,
@@ -1158,7 +1158,7 @@ class MainActivity : ComponentActivity() {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.ValidationError,
                     statusMessage =
-                        "Le Ledger diffère de l'état local " +
+                        "Ledger differs from the local state " +
                             "(local=${localSnapshot.entries.size}, ledger=${deviceVault.entries.size}).",
                     appName = info.name,
                     appVersion = info.version,
@@ -1171,7 +1171,7 @@ class MainActivity : ComponentActivity() {
             }
             SyncUpdate(
                 status = SyncStatus.Success,
-                statusMessage = "Le Ledger correspond à l'état local.",
+                statusMessage = "Ledger matches the local state.",
                 appName = info.name,
                 appVersion = info.version,
                 storageSize = config.storageSize,
@@ -1195,7 +1195,7 @@ class MainActivity : ComponentActivity() {
             syncUiState =
                 syncUiState.copy(
                     status = SyncStatus.Idle,
-                    statusMessage = "Aucun Ledger détecté.",
+                    statusMessage = "No Ledger detected.",
                     showVerifyCallToAction = false,
                 )
             return null
@@ -1213,7 +1213,7 @@ class MainActivity : ComponentActivity() {
             syncUiState =
                 syncUiState.copy(
                     status = SyncStatus.ValidationError,
-                    statusMessage = "Renseigne une adresse Speculos.",
+                    statusMessage = "Enter a Speculos address.",
                     deviceName = null,
                     showVerifyCallToAction = false,
                 )
@@ -1226,7 +1226,7 @@ class MainActivity : ComponentActivity() {
                     syncUiState =
                         syncUiState.copy(
                             status = SyncStatus.ValidationError,
-                            statusMessage = "Le port Speculos doit être un entier entre 1 et 65535.",
+                            statusMessage = "Speculos port must be an integer between 1 and 65535.",
                             deviceName = null,
                             showVerifyCallToAction = false,
                         )
@@ -1311,11 +1311,11 @@ class MainActivity : ComponentActivity() {
                     val persistence =
                         applyLocalVault(
                             replacement,
-                            "Vault local remplacé depuis la cible.",
+                            "Local vault replaced from the target.",
                             backupJsonText = update.replaceLocalBackupJsonText,
                         )
                     if (!persistence.persisted) {
-                        statusMessage = "${update.statusMessage} Le remplacement local n'a pas pu être persisté."
+                        statusMessage = "${update.statusMessage} The local replacement could not be persisted."
                     }
                 }
             }
@@ -1383,7 +1383,7 @@ internal data class PushConfirmationDialogState(
     val title: String,
     val body: String,
     val canConfirm: Boolean,
-    val confirmLabel: String = "Continuer",
+    val confirmLabel: String = "Continue",
 )
 
 internal sealed interface AppDialogState {
@@ -1396,13 +1396,13 @@ internal sealed interface AppDialogState {
     data class StartupWarning(
         val dontShowAgain: Boolean = false,
     ) : AppDialogState {
-        override val title: String = "Avertissement expérimental"
+        override val title: String = "Experimental warning"
         override val body: String =
-            "Cette application est expérimentale. Sur un vrai device, certaines écritures peuvent provoquer " +
-                "un comportement instable de l'app Passwords, voire une réinitialisation nécessitant une reconfiguration. " +
-                "Utilise de préférence la lecture, le diff et la vérification avant toute écriture matérielle."
+            "This application is experimental. On a real device, some writes can cause " +
+                "unstable behavior in the Passwords app, or even a reset that requires reconfiguration. " +
+                "Prefer reading, diffing, and verification before any hardware write."
         override val canConfirm: Boolean = true
-        override val confirmLabel: String = "Continuer"
+        override val confirmLabel: String = "Continue"
         override val dismissLabel: String? = null
     }
 
@@ -1413,17 +1413,17 @@ internal sealed interface AppDialogState {
         override val body: String get() = state.body
         override val canConfirm: Boolean get() = state.canConfirm
         override val confirmLabel: String get() = state.confirmLabel
-        override val dismissLabel: String = if (state.canConfirm) "Annuler" else "Fermer"
+        override val dismissLabel: String = if (state.canConfirm) "Cancel" else "Close"
     }
 
     data class DeleteEntry(
         val nickname: String,
     ) : AppDialogState {
-        override val title: String = "Supprimer cet identifiant ?"
-        override val body: String = "L'identifiant \"$nickname\" sera supprimé du vault local."
+        override val title: String = "Delete this identifier?"
+        override val body: String = "Identifier \"$nickname\" will be removed from the local vault."
         override val canConfirm: Boolean = true
-        override val confirmLabel: String = "Supprimer"
-        override val dismissLabel: String = "Annuler"
+        override val confirmLabel: String = "Delete"
+        override val dismissLabel: String = "Cancel"
     }
 
     data class ConfirmBackupImport(
@@ -1432,23 +1432,23 @@ internal sealed interface AppDialogState {
         val backupJsonText: String,
         val hasRiskFindings: Boolean,
     ) : AppDialogState {
-        override val title: String = "Remplacer le vault local ?"
+        override val title: String = "Replace local vault?"
         override val body: String =
             buildString {
-                append("Le fichier ")
+                append("File ")
                 append(fileName)
-                append(" contient ")
+                append(" contains ")
                 append(importedVault.entries.size)
-                append(" identifiant")
+                append(" identifier")
                 if (importedVault.entries.size > 1) append('s')
-                append(". L'état local actuel sera remplacé.")
+                append(". The current local state will be replaced.")
                 if (hasRiskFindings) {
-                    append(" Ce backup contient des signaux faibles de risque qui pourront bloquer un push matériel tant qu'il n'aura pas été normalisé.")
+                    append(" This backup contains weak risk signals that may block a hardware push until it has been normalized.")
                 }
             }
         override val canConfirm: Boolean = true
-        override val confirmLabel: String = "Importer et remplacer"
-        override val dismissLabel: String = "Annuler"
+        override val confirmLabel: String = "Import and replace"
+        override val dismissLabel: String = "Cancel"
     }
 
     data class ConfirmLedgerImport(
@@ -1462,7 +1462,7 @@ internal sealed interface AppDialogState {
         val backupJsonText: String?,
     ) : AppDialogState {
         override val canConfirm: Boolean = true
-        override val dismissLabel: String = "Annuler"
+        override val dismissLabel: String = "Cancel"
     }
 }
 
@@ -1522,9 +1522,12 @@ internal object UiTags {
     const val HomeOpenSync = "home_open_sync"
     const val EntryNicknameField = "entry_nickname_field"
     const val EntrySave = "entry_save"
+    const val DialogStartupDontShowAgain = "dialog_startup_dont_show_again"
     const val SyncBack = "sync_back"
     const val SyncScroll = "sync_scroll"
     const val SyncStatusMessage = "sync_status_message"
+    const val SyncDiffSection = "sync_diff_section"
+    const val SyncWriteSection = "sync_write_section"
     const val SyncTransportUsb = "sync_transport_usb"
     const val SyncTransportSpeculos = "sync_transport_speculos"
     const val SyncSpeculosHost = "sync_speculos_host"
@@ -1533,6 +1536,8 @@ internal object UiTags {
     const val SyncPull = "sync_pull"
     const val SyncPush = "sync_push"
     const val SyncVerify = "sync_verify"
+    const val SettingsPushConfirmationSwitch = "settings_push_confirmation_switch"
+    const val SettingsStartupWarningSwitch = "settings_startup_warning_switch"
 }
 
 private fun CharsetPolicy.toFlags(): Set<CharsetFlag> =

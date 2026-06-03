@@ -17,7 +17,7 @@ class LocalVaultStore(
         if (!file.exists()) {
             return LocalVaultLoadResult(
                 vault = Vault(source = VaultSource.Local),
-                message = "Vault local vide. Ajoute un identifiant ou importe depuis Ledger.",
+                message = "Local vault is empty. Add an identifier or import from Ledger.",
                 backupJsonText = null,
             )
         }
@@ -28,7 +28,7 @@ class LocalVaultStore(
             } catch (error: IOException) {
                 return LocalVaultLoadResult(
                     vault = null,
-                    message = "Impossible de lire ${file.name}: ${error.message ?: error::class.java.simpleName}.",
+                    message = "Unable to read ${file.name}: ${error.message ?: error::class.java.simpleName}.",
                     backupJsonText = null,
                 )
             }
@@ -36,7 +36,7 @@ class LocalVaultStore(
         return try {
             LocalVaultLoadResult(
                 vault = decodeVault(text),
-                message = "Vault local chargé depuis ${file.name}.",
+                message = "Local vault loaded from ${file.name}.",
                 backupJsonText = text,
             )
         } catch (_: Throwable) {
@@ -44,7 +44,7 @@ class LocalVaultStore(
             runCatching { file.copyTo(File(file.parentFile, backupName), overwrite = true) }
             LocalVaultLoadResult(
                 vault = Vault(source = VaultSource.Local),
-                message = "Le stockage local était invalide. Une copie a été conservée dans $backupName.",
+                message = "Local storage was invalid. A copy was preserved in $backupName.",
                 backupJsonText = null,
             )
         }

@@ -70,7 +70,7 @@ VERSION_SPECS: tuple[VersionSpec, ...] = (
 CASES: tuple[DifferentialCase, ...] = (
     DifferentialCase(
         case_id="sofian_show_first",
-        note="Référence valide avec un seul identifiant contenant un espace",
+        note="Valid reference with a single identifier containing a space",
         setup_kind="backup",
         seed_entries=(SeedEntry("sofian terki"),),
         action="show",
@@ -78,7 +78,7 @@ CASES: tuple[DifferentialCase, ...] = (
     ),
     DifferentialCase(
         case_id="leading_space_delete_first",
-        note="Référence valide avec espace en tête puis delete",
+        note="Valid reference with leading space then delete",
         setup_kind="backup",
         seed_entries=(SeedEntry(" leading"),),
         action="delete",
@@ -86,7 +86,7 @@ CASES: tuple[DifferentialCase, ...] = (
     ),
     DifferentialCase(
         case_id="alpha_beta_show_second",
-        note="Seed valide connu pour crasher sur show du second item",
+        note="Known valid seed that crashes on show for the second item",
         setup_kind="backup",
         seed_entries=(SeedEntry("alpha"), SeedEntry("beta")),
         action="show",
@@ -94,7 +94,7 @@ CASES: tuple[DifferentialCase, ...] = (
     ),
     DifferentialCase(
         case_id="second_len_plus1_show_second",
-        note="Seed raw corrompu accepté puis show du second item",
+        note="Accepted corrupted raw seed then show the second item",
         setup_kind="mutated_second_len_plus1",
         seed_entries=(SeedEntry("github"), SeedEntry("gmail")),
         action="show",

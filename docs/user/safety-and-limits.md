@@ -1,65 +1,65 @@
-# Sécurité, limites et garde-fous
+# Safety, Limits, and Guardrails
 
-## Ce que l'app protège
+## What the App Protects
 
-Le companion aide à préparer et transférer les metadata de Ledger Passwords, mais il ne remplace pas le Ledger comme racine de confiance.
+The companion helps prepare and transfer Ledger Passwords metadata, but it does not replace the Ledger as the root of trust.
 
-Rappels :
+Reminders:
 
-- la recovery phrase ne doit jamais être saisie dans cette app ;
-- les nicknames peuvent être privés, mais ne sont pas des secrets cryptographiques ;
-- l'app ne dérive pas les mots de passe finaux.
+- the recovery phrase must never be entered into this app;
+- nicknames may be private, but they are not cryptographic secrets;
+- the app does not derive final passwords.
 
-## Limites fonctionnelles importantes
+## Important Functional Limits
 
-- `19` octets UTF-8 maximum par nickname ;
-- bloc metadata limité par le `storage_size` exposé par l'app Passwords ;
-- le Ledger ne propose pas d'APDU d'ajout ou suppression unitaire : chaque écriture remplace tout le bloc metadata.
+- `19` UTF-8 bytes maximum per nickname;
+- metadata block limited by the `storage_size` exposed by the Passwords app;
+- the Ledger does not provide unit add/delete APDUs: every write replaces the whole metadata block.
 
-## Politique de sécurité avant push réel
+## Safety Policy Before a Real Push
 
-Avant un `push` vers un vrai Ledger, le companion applique une policy plus stricte que le protocole brut.
+Before a `push` to a real Ledger, the companion applies a stricter policy than the raw protocol.
 
-Exemples de blocage :
+Blocking examples:
 
-- caractères de contrôle ;
-- `NUL`, retours à la ligne, tabulations ;
-- caractères de format Unicode dangereux, comme certains zero-width ou contrôles bidi ;
-- doublons logiques après normalisation ;
-- backup brut jugé incohérent ou corrompu.
+- control characters;
+- `NUL`, newlines, tabs;
+- dangerous Unicode formatting characters, such as some zero-width or bidi controls;
+- logical duplicates after normalization;
+- raw backup considered inconsistent or corrupted.
 
-Exemples d'avertissement :
+Warning examples:
 
-- espaces en début ou fin ;
-- identifiants très proches ;
-- corpus dense ;
-- backup importé avec signaux faibles de risque.
+- leading or trailing spaces;
+- very similar identifiers;
+- dense datasets;
+- imported backups with weak risk signals.
 
-## Override dangereux
+## Dangerous Override
 
-Un contournement existe pour les tests, mais il est séparé dans `Debug`.
+A bypass exists for testing, but it is isolated in `Debug`.
 
-Il ne doit être utilisé que pour :
+It should only be used to:
 
-- reproduire un bug ;
-- tester un comportement sous supervision ;
-- travailler avec Speculos ou un device de labo.
+- reproduce a bug;
+- test a behavior under supervision;
+- work with Speculos or a lab device.
 
-## Précaution pratique
+## Practical Precaution
 
-Avant un `push` réel :
+Before a real `push`:
 
-1. exporter un `backup.json` ;
-2. relire le diff ;
-3. confirmer le popup d'écriture ;
-4. vérifier ensuite explicitement le résultat.
+1. export a `backup.json`;
+2. re-read the diff;
+3. confirm the write popup;
+4. explicitly verify the result afterward.
 
-## Limites actuelles
+## Current Limits
 
-Le companion réduit le risque, mais ne peut pas corriger les bugs internes de `app-passwords`.
+The companion reduces risk, but it cannot fix internal `app-passwords` bugs.
 
-Les campagnes de fuzzing ont déjà montré que certains états valides ou semi-valides peuvent faire crasher l'app Ledger elle-même. Pour cette raison :
+Fuzzing campaigns have already shown that some valid or semi-valid states can crash the Ledger app itself. For that reason:
 
-- Speculos doit servir de banc d'essai avant tout test risqué ;
-- le `push` réel doit rester réfléchi et explicite ;
-- les flows debug restent séparés du flow normal.
+- Speculos should be used as a proving ground before any risky test;
+- real `push` should remain deliberate and explicit;
+- debug flows remain separate from the normal flow.

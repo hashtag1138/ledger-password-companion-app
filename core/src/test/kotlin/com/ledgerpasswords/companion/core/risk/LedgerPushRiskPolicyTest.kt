@@ -22,6 +22,31 @@ class LedgerPushRiskPolicyTest {
     }
 
     @Test
+    fun `multiple entries are blocked in hardware safe mode`() {
+        val assessment =
+            policy.assess(
+                vault = Vault(entries = listOf(PasswordIdentifier("sofian terki"), PasswordIdentifier("abc"))),
+                mode = PushSafetyMode.HardwareSafe,
+            )
+
+        assertEquals(PushRiskDecision.Block, assessment.decision)
+        assertTrue(assessment.summaryLines().any { it.contains("multiple entries") })
+        assertTrue(assessment.summaryLines().any { it.contains("show password") })
+    }
+
+    @Test
+    fun `multiple entries are warned in standard mode`() {
+        val assessment =
+            policy.assess(
+                vault = Vault(entries = listOf(PasswordIdentifier("sofian terki"), PasswordIdentifier("abc"))),
+                mode = PushSafetyMode.Standard,
+            )
+
+        assertEquals(PushRiskDecision.Warn, assessment.decision)
+        assertTrue(assessment.summaryLines().any { it.contains("multiple entries") })
+    }
+
+    @Test
     fun `leading whitespace is blocked in hardware safe mode`() {
         val assessment =
             policy.assess(
@@ -30,7 +55,7 @@ class LedgerPushRiskPolicyTest {
             )
 
         assertEquals(PushRiskDecision.Block, assessment.decision)
-        assertTrue(assessment.summaryLines().any { it.contains("commence ou finit par un espace") })
+        assertTrue(assessment.summaryLines().any { it.contains("starts or ends with whitespace") })
     }
 
     @Test
@@ -42,7 +67,7 @@ class LedgerPushRiskPolicyTest {
             )
 
         assertEquals(PushRiskDecision.Block, assessment.decision)
-        assertTrue(assessment.summaryLines().any { it.contains("équivalents après normalisation") })
+        assertTrue(assessment.summaryLines().any { it.contains("equivalent after normalization") })
     }
 
     @Test
@@ -53,8 +78,8 @@ class LedgerPushRiskPolicyTest {
                 mode = PushSafetyMode.HardwareSafe,
             )
 
-        assertEquals(PushRiskDecision.Warn, assessment.decision)
-        assertTrue(assessment.summaryLines().any { it.contains("listes denses") })
+        assertEquals(PushRiskDecision.Block, assessment.decision)
+        assertTrue(assessment.summaryLines().any { it.contains("Dense lists") })
     }
 
     @Test

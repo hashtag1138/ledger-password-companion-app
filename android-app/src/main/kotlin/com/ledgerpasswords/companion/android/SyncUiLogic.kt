@@ -5,7 +5,7 @@ import com.ledgerpasswords.companion.core.model.Vault
 
 internal data class SyncUiState(
     val status: SyncStatus = SyncStatus.Idle,
-    val statusMessage: String = "Branche un Ledger et ouvre l'app Passwords.",
+    val statusMessage: String = "Connect a Ledger and open the Passwords app.",
     val deviceName: String? = null,
     val appName: String? = null,
     val appVersion: String? = null,
@@ -86,48 +86,48 @@ internal fun applySyncUpdate(previous: SyncUiState, update: SyncUpdate): SyncUiS
         showVerifyCallToAction = update.showVerifyCallToAction ?: previous.showVerifyCallToAction,
     )
 
-internal fun SyncStatus.frenchLabel(): String =
+internal fun SyncStatus.displayLabel(): String =
     when (this) {
-        SyncStatus.Idle -> "En attente"
-        SyncStatus.UsbPermissionRequired -> "Permission USB requise"
-        SyncStatus.DeviceConnected -> "Cible prête"
-        SyncStatus.WrongAppOpened -> "Mauvaise app"
-        SyncStatus.WaitingForLedgerApproval -> "Validation sur Ledger"
-        SyncStatus.Dumping -> "Lecture en cours"
-        SyncStatus.Loading -> "Écriture en cours"
-        SyncStatus.Verifying -> "Vérification en cours"
-        SyncStatus.WriteDisabled -> "Écriture désactivée"
-        SyncStatus.Success -> "Terminé"
-        SyncStatus.CancelledByUser -> "Annulé"
-        SyncStatus.TransportError -> "Erreur de transport"
-        SyncStatus.ValidationError -> "Blocage de sécurité"
+        SyncStatus.Idle -> "Idle"
+        SyncStatus.UsbPermissionRequired -> "USB permission required"
+        SyncStatus.DeviceConnected -> "Target ready"
+        SyncStatus.WrongAppOpened -> "Wrong app"
+        SyncStatus.WaitingForLedgerApproval -> "Waiting for Ledger approval"
+        SyncStatus.Dumping -> "Reading"
+        SyncStatus.Loading -> "Writing"
+        SyncStatus.Verifying -> "Verifying"
+        SyncStatus.WriteDisabled -> "Writing disabled"
+        SyncStatus.Success -> "Done"
+        SyncStatus.CancelledByUser -> "Cancelled"
+        SyncStatus.TransportError -> "Transport error"
+        SyncStatus.ValidationError -> "Safety block"
     }
 
 internal fun renderLedgerDiffSummary(diff: VaultDiff): String =
     if (!diff.hasChanges) {
-        "Aucune différence entre le local et le Ledger."
+        "No difference between local and Ledger."
     } else {
         buildList {
-            if (diff.added.isNotEmpty()) add("${diff.added.size} ajout${if (diff.added.size > 1) "s" else ""}")
-            if (diff.removed.isNotEmpty()) add("${diff.removed.size} suppression${if (diff.removed.size > 1) "s" else ""}")
-            if (diff.changedCharsets.isNotEmpty()) add("${diff.changedCharsets.size} modification${if (diff.changedCharsets.size > 1) "s" else ""}")
+            if (diff.added.isNotEmpty()) add("${diff.added.size} addition${if (diff.added.size > 1) "s" else ""}")
+            if (diff.removed.isNotEmpty()) add("${diff.removed.size} removal${if (diff.removed.size > 1) "s" else ""}")
+            if (diff.changedCharsets.isNotEmpty()) add("${diff.changedCharsets.size} charset change${if (diff.changedCharsets.size > 1) "s" else ""}")
         }.joinToString(" • ")
     }
 
 internal fun renderLedgerDiffLines(diff: VaultDiff): List<String> =
     if (!diff.hasChanges) {
-        listOf("Aucune différence entre le local et le Ledger.")
+        listOf("No difference between local and Ledger.")
     } else {
         buildList {
             diff.added.forEach { entry ->
-                add("Local seulement: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+                add("Local only: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
             }
             diff.removed.forEach { entry ->
-                add("Ledger seulement: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
+                add("Ledger only: ${entry.nickname} [${entry.charsets.toLedgerNames().joinToString(",")}]")
             }
             diff.changedCharsets.forEach { change ->
                 add(
-                    "Charsets différents: ${change.after.nickname} " +
+                    "Different charsets: ${change.after.nickname} " +
                         "[Ledger=${change.before.charsets.toLedgerNames().joinToString(",")}] -> " +
                         "[Local=${change.after.charsets.toLedgerNames().joinToString(",")}]",
                 )

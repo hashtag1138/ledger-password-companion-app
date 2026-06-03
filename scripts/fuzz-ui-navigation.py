@@ -47,14 +47,14 @@ class NavigationCase:
 CASES: tuple[NavigationCase, ...] = (
     NavigationCase(
         case_id="empty_home_walk_seed11",
-        note="Navigation chaotique depuis un vault vide",
+        note="Chaotic navigation from an empty vault",
         setup_kind="empty",
         random_seed=11,
         steps=48,
     ),
     NavigationCase(
         case_id="single_entry_walk_seed21",
-        note="Navigation chaotique avec un seul identifiant",
+        note="Chaotic navigation with a single identifier",
         setup_kind="backup",
         random_seed=21,
         steps=64,
@@ -62,7 +62,7 @@ CASES: tuple[NavigationCase, ...] = (
     ),
     NavigationCase(
         case_id="leading_space_walk_seed22",
-        note="Navigation chaotique avec un identifiant à espace initial",
+        note="Chaotic navigation with an identifier that starts with a space",
         setup_kind="backup",
         random_seed=22,
         steps=64,
@@ -70,7 +70,7 @@ CASES: tuple[NavigationCase, ...] = (
     ),
     NavigationCase(
         case_id="multi_entry_walk_seed31",
-        note="Navigation chaotique sur une liste multi-entrées",
+        note="Chaotic navigation on a multi-entry list",
         setup_kind="backup",
         random_seed=31,
         steps=72,
@@ -78,7 +78,7 @@ CASES: tuple[NavigationCase, ...] = (
     ),
     NavigationCase(
         case_id="mutated_second_len_plus1_walk_seed41",
-        note="Navigation chaotique après chargement du raw corrompu accepté second_len_plus1",
+        note="Chaotic navigation after loading the accepted corrupted raw second_len_plus1",
         setup_kind="mutated_second_len_plus1",
         random_seed=41,
         steps=72,

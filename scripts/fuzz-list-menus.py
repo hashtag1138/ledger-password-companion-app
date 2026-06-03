@@ -47,14 +47,14 @@ class MenuCase:
 CASES: tuple[MenuCase, ...] = (
     MenuCase(
         case_id="dense_twelve_show_delete_last",
-        note="Liste dense de 12 entrées, lecture puis suppression du dernier item",
+        note="Dense list of 12 entries, read then delete the last item",
         entries=tuple(SeedEntry(f"slot-{index:02d}") for index in range(1, 13)),
         steps=(MenuStep("push"), MenuStep("show", position=12), MenuStep("delete", position=12)),
         expected_final_nicknames=tuple(f"slot-{index:02d}" for index in range(1, 12)),
     ),
     MenuCase(
         case_id="sameprefix_19bytes_delete_third",
-        note="Entrées 19 octets avec le même préfixe, suppression du 3e item",
+        note="19-byte entries with the same prefix, delete the third item",
         entries=(
             SeedEntry("sameprefixvalue-001"),
             SeedEntry("sameprefixvalue-002"),
@@ -72,7 +72,7 @@ CASES: tuple[MenuCase, ...] = (
     ),
     MenuCase(
         case_id="sameprefix_19bytes_type_last_delete_second",
-        note="Entrées 19 octets avec préfixe commun, type du dernier puis suppression du 2e",
+        note="19-byte entries with a shared prefix, type the last then delete the second",
         entries=(
             SeedEntry("sameprefixvalue-101"),
             SeedEntry("sameprefixvalue-102"),
@@ -90,14 +90,14 @@ CASES: tuple[MenuCase, ...] = (
     ),
     MenuCase(
         case_id="reindex_delete_first_then_last",
-        note="Réindexation après suppression du premier item puis lecture/suppression du dernier",
+        note="Reindex after deleting the first item then read/delete the last",
         entries=tuple(SeedEntry(f"reindex-{index:02d}") for index in range(1, 7)),
         steps=(MenuStep("push"), MenuStep("delete", position=1), MenuStep("show", position=5), MenuStep("delete", position=5)),
         expected_final_nicknames=tuple(f"reindex-{index:02d}" for index in range(2, 6)),
     ),
     MenuCase(
         case_id="mixed_widths_show_first_middle_last",
-        note="Rendu de liste avec largeurs hétérogènes et navigation first/middle/last",
+        note="List rendering with heterogeneous widths and first/middle/last navigation",
         entries=(
             SeedEntry("a"),
             SeedEntry("medium-name"),

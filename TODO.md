@@ -1,6 +1,6 @@
-# TODO prioritaire
+# Priority TODO
 
-1. Comprendre l'incident de reset observé sur vrai Ledger après `push` puis usage `Show password`, malgré un scénario sain sous Speculos 1.3.1.
-2. Confirmer en conditions réelles la version de l'app Passwords installée sur le Ledger et corréler le comportement avec le garde-fou `>= 1.3.1`.
-3. Ajouter des diagnostics plus précis côté Android sur `getAppInfo` et, si possible, un export structuré des versions/capacités device.
-4. Ajouter la gestion de conflits ou de merge avant remplacement local après `pull`.
+1. Understand the reset incident observed on real Ledger after `push` then use `Show password`, despite a healthy scenario under Speculos 1.3.1.
+2. Confirm in real conditions the version of the Passwords app installed on the Ledger and correlate the behavior with the `>= 1.3.1` safeguard.
+3. Add more precise diagnostics on the Android side on `getAppInfo` and, if possible, a structured export of device versions/capabilities.
+4. Add conflict or merge management before local replacement after `pull`.

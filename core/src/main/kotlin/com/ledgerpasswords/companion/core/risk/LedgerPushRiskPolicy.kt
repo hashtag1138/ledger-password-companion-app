@@ -40,12 +40,12 @@ data class LedgerPushRiskAssessment(
     fun summaryLines(): List<String> {
         val validationLines =
             validation.issues.map { issue ->
-                val prefix = if (issue.severity == ValidationSeverity.Error) "Blocage" else "Avertissement"
+                val prefix = if (issue.severity == ValidationSeverity.Error) "Blocked" else "Warning"
                 "$prefix: ${issue.message}"
             }
         val findingLines =
             findings.map { finding ->
-                val prefix = if (finding.severity == PushRiskSeverity.Block) "Blocage" else "Avertissement"
+                val prefix = if (finding.severity == PushRiskSeverity.Block) "Blocked" else "Warning"
                 "$prefix: ${finding.message}"
             }
         return validationLines + findingLines
@@ -87,7 +87,7 @@ class LedgerPushRiskPolicy(
                 findings += PushRiskFinding(
                     severity = if (mode == PushSafetyMode.HardwareSafe) PushRiskSeverity.Block else PushRiskSeverity.Warning,
                     code = "leading_or_trailing_whitespace",
-                    message = "Le nickname '$nickname' commence ou finit par un espace.",
+                    message = "Nickname '$nickname' starts or ends with whitespace.",
                     nickname = nickname,
                 )
             }
@@ -105,7 +105,7 @@ class LedgerPushRiskPolicy(
                 findings += PushRiskFinding(
                     severity = PushRiskSeverity.Block,
                     code = "normalized_duplicate_nickname",
-                    message = "Ces nicknames deviennent équivalents après normalisation: ${duplicates.joinToString(", ")}.",
+                    message = "These nicknames become equivalent after normalization: ${duplicates.joinToString(", ")}.",
                 )
             }
 
@@ -115,7 +115,7 @@ class LedgerPushRiskPolicy(
                 findings += PushRiskFinding(
                     severity = PushRiskSeverity.Block,
                     code = "confusable_visual_duplicate",
-                    message = "Ces nicknames sont visuellement confusables: ${duplicates.joinToString(", ")}.",
+                    message = "These nicknames are visually confusable: ${duplicates.joinToString(", ")}.",
                 )
             }
 
@@ -135,17 +135,27 @@ class LedgerPushRiskPolicy(
                     findings += PushRiskFinding(
                         severity = PushRiskSeverity.Warning,
                         code = "close_prefix_nicknames",
-                        message = "Les nicknames '$leftRaw' et '$rightRaw' sont très proches et risquent une mauvaise sélection sur le Ledger.",
+                        message = "Nicknames '$leftRaw' and '$rightRaw' are very close and may cause a wrong selection on the Ledger.",
                     )
                 }
             }
+        }
+
+        if (vault.entries.size >= 2) {
+            findings += PushRiskFinding(
+                severity = if (mode == PushSafetyMode.HardwareSafe) PushRiskSeverity.Block else PushRiskSeverity.Warning,
+                code = "multi_entry_show_second_known_crash",
+                message =
+                    "Vaults with multiple entries are currently dangerous: " +
+                        "our regressions show a reproducible app-passwords crash on \"show password\" for the second item.",
+            )
         }
 
         if (vault.entries.size >= 12) {
             findings += PushRiskFinding(
                 severity = PushRiskSeverity.Warning,
                 code = "dense_vault",
-                message = "Le vault contient ${vault.entries.size} entrées. Les listes denses sont connues pour être fragiles dans app-passwords.",
+                message = "The vault contains ${vault.entries.size} entries. Dense lists are known to be fragile in app-passwords.",
             )
         }
 

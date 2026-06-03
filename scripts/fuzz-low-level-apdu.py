@@ -113,7 +113,7 @@ PARTIAL_PREFIX = RAW_TARGET_SMALL[:32]
 CASES: tuple[ApduCase, ...] = (
     ApduCase(
         case_id="load_zero_length_nonfinal_then_valid_final",
-        note="Préfixer un LOAD final valide par un chunk vide non-final",
+        note="Prefix a valid final LOAD with an empty non-final chunk",
         setup_entries=SETUP_KEEP,
         steps=(
             ApduStep("empty-nonfinal", CLA_PASSWORDS, INS_LOAD_METADATAS, MORE_DATA, 0x00, b""),
@@ -124,7 +124,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="load_partial_prefix_abandon",
-        note="Envoyer un premier chunk LOAD non-final puis abandonner la séquence",
+        note="Send a first non-final LOAD chunk then abandon the sequence",
         setup_entries=SETUP_KEEP,
         steps=(ApduStep("partial-prefix", CLA_PASSWORDS, INS_LOAD_METADATAS, MORE_DATA, 0x00, PARTIAL_PREFIX),),
         acceptable_states=(names(SETUP_KEEP),),
@@ -132,7 +132,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="load_valid_final_then_extra_nonfinal",
-        note="LOAD final valide suivi d'un chunk non-final parasite",
+        note="Valid final LOAD followed by a stray non-final chunk",
         setup_entries=SETUP_KEEP,
         steps=(
             ApduStep("valid-final", CLA_PASSWORDS, INS_LOAD_METADATAS, LAST_CHUNK, 0x00, RAW_TARGET_SMALL),
@@ -143,7 +143,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="load_out_of_order_two_chunk",
-        note="Envoyer une séquence LOAD multi-chunk hors ordre",
+        note="Send an out-of-order multi-chunk LOAD sequence",
         setup_entries=SETUP_KEEP,
         steps=(
             ApduStep("chunk2-first", CLA_PASSWORDS, INS_LOAD_METADATAS, MORE_DATA, 0x00, BULK_CHUNK_2),
@@ -155,7 +155,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="load_duplicate_first_chunk_then_final_remainder",
-        note="Dupliquer le premier chunk d'un LOAD multi-chunk avant la fin",
+        note="Duplicate the first chunk of a multi-chunk LOAD before completion",
         setup_entries=SETUP_KEEP,
         steps=(
             ApduStep("chunk1", CLA_PASSWORDS, INS_LOAD_METADATAS, MORE_DATA, 0x00, BULK_CHUNK_1),
@@ -168,7 +168,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="dump_bad_p1_payload_then_pull",
-        note="DUMP avec p1/p2 invalides et payload parasite",
+        note="DUMP with invalid p1/p2 and a stray payload",
         setup_entries=TARGET_SMALL,
         steps=(ApduStep("dump-bad-p1", CLA_PASSWORDS, INS_DUMP_METADATAS, LAST_CHUNK, 0x7A, b"junk"),),
         acceptable_states=(names(TARGET_SMALL),),
@@ -176,7 +176,7 @@ CASES: tuple[ApduCase, ...] = (
     ),
     ApduCase(
         case_id="dump_partial_then_info_then_pull",
-        note="Commencer un DUMP, intercaler GET_APP_INFO, puis tirer l'état complet via la CLI",
+        note="Start a DUMP, interleave GET_APP_INFO, then pull the full state through the CLI",
         setup_entries=TARGET_SMALL,
         steps=(
             ApduStep("dump-first", CLA_PASSWORDS, INS_DUMP_METADATAS, 0x00, 0x00, b""),

@@ -16,13 +16,13 @@ class SyncUiLogicTest {
         val previous =
             SyncUiState(
                 status = SyncStatus.Success,
-                statusMessage = "Ancien état",
+                statusMessage = "Old state",
                 deviceName = "/dev/bus/usb/001/003",
                 appName = "Passwords",
                 appVersion = "1.3.1",
                 storageSize = 4096,
                 deviceEntries = 4,
-                diffLines = listOf("Diff obsolète"),
+                diffLines = listOf("Stale diff"),
             )
 
         val next =
@@ -30,14 +30,14 @@ class SyncUiLogicTest {
                 previous,
                 SyncUpdate(
                     status = SyncStatus.DeviceConnected,
-                    statusMessage = "Ledger connecté",
+                    statusMessage = "Ledger connected",
                     clearDeviceEntries = true,
                     clearDiffLines = true,
                 ),
             )
 
         assertEquals(SyncStatus.DeviceConnected, next.status)
-        assertEquals("Ledger connecté", next.statusMessage)
+        assertEquals("Ledger connected", next.statusMessage)
         assertEquals("/dev/bus/usb/001/003", next.deviceName)
         assertNull(next.deviceEntries)
         assertEquals(emptyList<String>(), next.diffLines)
@@ -48,8 +48,8 @@ class SyncUiLogicTest {
     fun `applySyncUpdate clears diff summary and verify CTA when requested`() {
         val previous =
             SyncUiState(
-                diffSummary = "1 ajout",
-                diffLines = listOf("ancien diff"),
+                diffSummary = "1 addition",
+                diffLines = listOf("old diff"),
                 showVerifyCallToAction = true,
             )
 
@@ -58,7 +58,7 @@ class SyncUiLogicTest {
                 previous,
                 SyncUpdate(
                     status = SyncStatus.Idle,
-                    statusMessage = "Retour au repos",
+                    statusMessage = "Back to idle",
                     clearDiffSummary = true,
                     clearDiffLines = true,
                     showVerifyCallToAction = false,
@@ -75,12 +75,12 @@ class SyncUiLogicTest {
         val previous =
             SyncUiState(
                 status = SyncStatus.DeviceConnected,
-                statusMessage = "Ancien état",
+                statusMessage = "Old state",
                 appName = "Passwords",
                 appVersion = "1.3.0",
                 storageSize = 4096,
                 deviceEntries = 1,
-                diffLines = listOf("Ancien diff"),
+                diffLines = listOf("Old diff"),
             )
 
         val next =
@@ -88,22 +88,22 @@ class SyncUiLogicTest {
                 previous,
                 SyncUpdate(
                     status = SyncStatus.Success,
-                    statusMessage = "Comparaison terminée",
+                    statusMessage = "Comparison completed",
                     appVersion = "1.3.1",
                     deviceEntries = 2,
-                    diffSummary = "1 ajout",
-                    diffLines = listOf("Nouveau diff"),
+                    diffSummary = "1 addition",
+                    diffLines = listOf("New diff"),
                 ),
             )
 
         assertEquals(SyncStatus.Success, next.status)
-        assertEquals("Comparaison terminée", next.statusMessage)
+        assertEquals("Comparison completed", next.statusMessage)
         assertEquals("Passwords", next.appName)
         assertEquals("1.3.1", next.appVersion)
         assertEquals(4096, next.storageSize)
         assertEquals(2, next.deviceEntries)
-        assertEquals("1 ajout", next.diffSummary)
-        assertEquals(listOf("Nouveau diff"), next.diffLines)
+        assertEquals("1 addition", next.diffSummary)
+        assertEquals(listOf("New diff"), next.diffLines)
     }
 
     @Test
@@ -124,13 +124,13 @@ class SyncUiLogicTest {
                 ),
             )
 
-        assertEquals("1 ajout • 1 suppression • 1 modification", renderLedgerDiffSummary(diff))
+        assertEquals("1 addition • 1 removal • 1 charset change", renderLedgerDiffSummary(diff))
     }
 
     @Test
     fun `sync status labels are user friendly`() {
-        assertEquals("Blocage de sécurité", SyncStatus.ValidationError.frenchLabel())
-        assertEquals("Validation sur Ledger", SyncStatus.WaitingForLedgerApproval.frenchLabel())
+        assertEquals("Safety block", SyncStatus.ValidationError.displayLabel())
+        assertEquals("Waiting for Ledger approval", SyncStatus.WaitingForLedgerApproval.displayLabel())
     }
 
     @Test
@@ -142,7 +142,7 @@ class SyncUiLogicTest {
             )
 
         assertEquals(
-            listOf("Aucune différence entre le local et le Ledger."),
+            listOf("No difference between local and Ledger."),
             renderLedgerDiffLines(diff),
         )
     }
@@ -167,9 +167,9 @@ class SyncUiLogicTest {
 
         assertEquals(
             listOf(
-                "Local seulement: proton [ALL_SETS]",
-                "Ledger seulement: gmail [ALL_SETS]",
-                "Charsets différents: github [Ledger=LOWERCASE] -> [Local=UPPERCASE,LOWERCASE,NUMBERS]",
+                "Local only: proton [ALL_SETS]",
+                "Ledger only: gmail [ALL_SETS]",
+                "Different charsets: github [Ledger=LOWERCASE] -> [Local=UPPERCASE,LOWERCASE,NUMBERS]",
             ),
             renderLedgerDiffLines(diff),
         )

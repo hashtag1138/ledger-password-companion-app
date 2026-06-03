@@ -1,6 +1,6 @@
-# Test fixtures
+# Test Fixtures
 
-Fixtures utiles pour les tests offline.
+Useful fixtures for offline tests.
 
-- `metadata-existing.hex` : dump court contenant `password1`, `password2`, `password3` avant padding.
-- `backup-example.json` : backup JSON companion compatible avec les champs de l'outil web Ledger.
+- `metadata-existing.hex`: short dump containing `password1`, `password2`, `password3` before padding.
+- `backup-example.json`: companion-compatible JSON backup with the Ledger web tool fields.

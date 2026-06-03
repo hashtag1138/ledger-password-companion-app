@@ -16,6 +16,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+_KEY_MAPS = (
+    "abcdefghijklmnopqrstuvwxyz\b\n\r",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ\b\n\r",
+    "0123456789 '\"`&/?!:;.,~*$=+-[](){}^<>\\_#@|%\b\n\r",
+)
+_MODE_LOWER = 0
+_MODE_UPPER = 1
+_MODE_DIGITS = 2
+
 
 class HarnessError(RuntimeError):
     pass
@@ -59,6 +68,8 @@ class SpeculosHarness:
         self.save_nvram = save_nvram
         self.process: subprocess.Popen[str] | None = None
         self.log_path: Path | None = None
+        self._kbd_mode: int | None = None
+        self._kbd_index = 0
 
     def start(self) -> None:
         if self.process is not None:
@@ -126,13 +137,23 @@ class SpeculosHarness:
             raise HarnessError(f"Speculos exited with code {self.process.returncode}")
 
     def initialize_first_run(self) -> None:
-        for _ in range(4):
-            self.press_button("right")
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            text = self.current_screen_text()
+            if "Disclaimer" in text:
+                self.press_button("right")
+                continue
+            if "Yes, I understand" in text:
+                self.press_button("both")
+                continue
+            if "Host keyboard" in text:
+                self.press_button("both")
+                time.sleep(0.2)
+                break
+            if "Manage passwords" in text or "Tap to manage" in text:
+                break
             time.sleep(0.1)
-        self.press_button("both")
-        time.sleep(0.2)
-        self.press_button("both")
-        time.sleep(0.2)
+        self._kbd_reset_state()
         self.delete_events()
 
     def current_screen_text(self) -> str:
@@ -317,6 +338,18 @@ class SpeculosHarness:
         while time.time() < deadline:
             text = self.current_screen_text()
             last_text = text
+            if "Disclaimer" in text:
+                self.press_button("right")
+                time.sleep(0.2)
+                continue
+            if "Yes, I understand" in text:
+                self.press_button("both")
+                time.sleep(0.3)
+                continue
+            if "Host keyboard" in text:
+                self.press_button("both")
+                time.sleep(0.3)
+                continue
             if "Which action?" in text:
                 return
             if "Tap to manage" in text:
@@ -332,6 +365,19 @@ class SpeculosHarness:
             if "PASSWORD HAS" in text:
                 self.press_button("both")
                 time.sleep(0.3)
+                continue
+            if "NEW PASSWORD" in text or "CREATED" in text or "BEEN DELETED" in text:
+                self.press_button("both")
+                time.sleep(0.3)
+                continue
+            if "Passwords list" in text:
+                for _ in range(12):
+                    if self.current_screen_text().strip() == "Back":
+                        self.press_button("both")
+                        time.sleep(0.3)
+                        break
+                    self.press_button("right")
+                    time.sleep(0.2)
                 continue
             if text.strip() == "Back":
                 self.press_button("both")
@@ -400,6 +446,16 @@ class SpeculosHarness:
         self.confirm_yes()
         return self.wait_for_screen_text(contains="PASSWORD HAS", timeout_seconds=3.0)
 
+    def create_password(self, nickname: str) -> str:
+        if not nickname:
+            raise HarnessError("Nickname must not be empty")
+        self.home_to_menu()
+        self.menu_select(0)
+        self.wait_for_screen_text(contains="Create password", timeout_seconds=3.0)
+        self._write(nickname)
+        self._keyboard_confirm()
+        return self.wait_for_screen_text(contains="NEW PASSWORD", timeout_seconds=3.0)
+
     def show_first_password(self) -> str:
         return self.show_password(position=1)
 
@@ -408,6 +464,73 @@ class SpeculosHarness:
 
     def delete_first_password(self) -> str:
         return self.delete_password(position=1)
+
+    def _kbd_reset_state(self) -> None:
+        self._kbd_mode = None
+        self._kbd_index = 0
+
+    def _kbd_navigate_to(self, target_index: int, ring_size: int) -> None:
+        right_steps = (target_index - self._kbd_index) % ring_size
+        left_steps = (self._kbd_index - target_index) % ring_size
+        if right_steps <= left_steps:
+            steps, action = right_steps, lambda: self.press_button("right")
+        else:
+            steps, action = left_steps, lambda: self.press_button("left")
+        for _ in range(steps):
+            action()
+        self._kbd_index = target_index
+
+    def _kbd_enter_mode(self, target_mode: int) -> None:
+        self._kbd_navigate_to(target_mode, ring_size=3)
+        self.press_button("both")
+        self._kbd_mode = target_mode
+        self._kbd_index = 0
+
+    def _kbd_leave_mode(self) -> None:
+        if self._kbd_mode is None:
+            return
+        keys = _KEY_MAPS[self._kbd_mode]
+        self._kbd_navigate_to(len(keys) - 1, ring_size=len(keys))
+        self.press_button("both")
+        self._kbd_mode = None
+        self._kbd_index = 0
+
+    def _required_mode(self, char: str) -> int:
+        if char.isupper():
+            return _MODE_UPPER
+        if char.islower():
+            return _MODE_LOWER
+        return _MODE_DIGITS
+
+    def _kbd_ensure_mode(self, target_mode: int) -> None:
+        if self._kbd_mode == target_mode:
+            return
+        if self._kbd_mode is not None:
+            self._kbd_leave_mode()
+        self._kbd_enter_mode(target_mode)
+
+    def _kbd_type_char(self, char: str) -> None:
+        target_mode = self._required_mode(char)
+        self._kbd_ensure_mode(target_mode)
+        keys = _KEY_MAPS[self._kbd_mode]
+        try:
+            target_idx = keys.index(char)
+        except ValueError as error:
+            raise HarnessError(f"Character {char!r} cannot be typed on Nano keyboard") from error
+        self._kbd_navigate_to(target_idx, ring_size=len(keys))
+        self.press_button("both")
+
+    def _write(self, characters: str) -> None:
+        for char in characters:
+            self._kbd_type_char(char)
+
+    def _keyboard_confirm(self) -> None:
+        if self._kbd_mode is None:
+            self._kbd_enter_mode(_MODE_LOWER)
+        keys = _KEY_MAPS[self._kbd_mode]
+        self._kbd_navigate_to(keys.index("\n"), ring_size=len(keys))
+        self.press_button("both")
+        self._kbd_reset_state()
 
     def log_tail(self, lines: int = 120) -> str:
         if self.log_path is None or not self.log_path.exists():

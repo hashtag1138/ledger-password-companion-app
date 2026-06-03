@@ -71,7 +71,7 @@ class BackupJsonCodec(
                         findings += PushRiskFinding(
                             severity = PushRiskSeverity.Block,
                             code = "raw_metadata_decode_failed",
-                            message = "Le champ raw_metadatas n'est pas décodable: ${error.message ?: error::class.java.simpleName}.",
+                            message = "The raw_metadatas field cannot be decoded: ${error.message ?: error::class.java.simpleName}.",
                         )
                         null
                     }
@@ -81,7 +81,7 @@ class BackupJsonCodec(
             findings += PushRiskFinding(
                 severity = PushRiskSeverity.Block,
                 code = "backup_corruptions_reported",
-                message = "Le backup déclare ${file.corruptions.size} corruption(s) rencontrée(s).",
+                message = "The backup reports ${file.corruptions.size} encountered corruption(s).",
             )
         }
 
@@ -91,7 +91,7 @@ class BackupJsonCodec(
                     findings += PushRiskFinding(
                         severity = PushRiskSeverity.Block,
                         code = "raw_storage_size_mismatch",
-                        message = "Le raw metadata fait ${rawBytes.size} octets, mais le backup annonce ${file.storageSize}.",
+                        message = "Raw metadata is ${rawBytes.size} bytes, but the backup declares ${file.storageSize}.",
                     )
                 }
                 runCatching { metadataCodec.decode(rawBytes) }
@@ -99,7 +99,7 @@ class BackupJsonCodec(
                         findings += PushRiskFinding(
                             severity = PushRiskSeverity.Block,
                             code = "raw_metadata_invalid",
-                            message = "Le raw metadata n'a pas pu être décodé: ${error.message ?: error::class.java.simpleName}.",
+                            message = "Raw metadata could not be decoded: ${error.message ?: error::class.java.simpleName}.",
                         )
                         null
                     }
@@ -111,7 +111,7 @@ class BackupJsonCodec(
                     findings += PushRiskFinding(
                         severity = PushRiskSeverity.Block,
                         code = "decoded_raw_corruptions",
-                        message = "Le raw metadata décodé contient ${decoded.corruptions.size} corruption(s).",
+                        message = "The decoded raw metadata contains ${decoded.corruptions.size} corruption(s).",
                     )
                 }
                 decoded.vault.copy(source = VaultSource.BackupFile).sortedByNickname()
@@ -121,7 +121,7 @@ class BackupJsonCodec(
             findings += PushRiskFinding(
                 severity = PushRiskSeverity.Block,
                 code = "parsed_raw_mismatch",
-                message = "Les entrées parsed et raw_metadatas ne décrivent pas le même vault.",
+                message = "The parsed entries and raw_metadatas do not describe the same vault.",
             )
         }
 
@@ -133,7 +133,7 @@ class BackupJsonCodec(
                 findings += PushRiskFinding(
                     severity = PushRiskSeverity.Block,
                     code = "raw_not_roundtrip_stable",
-                    message = "Le raw metadata n'est pas stable après decode/encode local.",
+                    message = "Raw metadata is not stable after local decode/encode.",
                 )
             }
         }

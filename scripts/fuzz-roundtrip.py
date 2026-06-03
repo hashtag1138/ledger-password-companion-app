@@ -41,19 +41,19 @@ class RoundTripCase:
 CASES: tuple[RoundTripCase, ...] = (
     RoundTripCase(
         case_id="empty_three_cycles",
-        note="Vault vide sur trois cycles",
+        note="Empty vault over three cycles",
         parsed_entries=(),
         expected_entries=(),
     ),
     RoundTripCase(
         case_id="sofian_space_three_cycles",
-        note="Nickname avec espace au milieu",
+        note="Nickname with a space in the middle",
         parsed_entries=(SeedEntry("sofian terki"),),
         expected_entries=(SeedEntry("sofian terki"),),
     ),
     RoundTripCase(
         case_id="mixed_charsets_three_cycles",
-        note="Corpus multi-entrée avec charsets variés",
+        note="Multi-entry corpus with varied charsets",
         parsed_entries=(
             SeedEntry("github", ("UPPERCASE", "LOWERCASE", "NUMBERS")),
             SeedEntry("gmail", ("ALL_SETS",)),
@@ -67,13 +67,13 @@ CASES: tuple[RoundTripCase, ...] = (
     ),
     RoundTripCase(
         case_id="utf8_19bytes_three_cycles",
-        note="Nickname UTF-8 à exactement 19 octets",
+        note="UTF-8 nickname at exactly 19 bytes",
         parsed_entries=(SeedEntry("éééééééééa"),),
         expected_entries=(SeedEntry("éééééééééa"),),
     ),
     RoundTripCase(
         case_id="embedded_raw_preferred_three_cycles",
-        note="raw_metadatas embarqué doit rester prioritaire et stable",
+        note="Embedded raw_metadatas must stay authoritative and stable",
         parsed_entries=(SeedEntry("parsed-loses"),),
         expected_entries=(SeedEntry("raw-wins"),),
         raw_entries=(SeedEntry("raw-wins"),),

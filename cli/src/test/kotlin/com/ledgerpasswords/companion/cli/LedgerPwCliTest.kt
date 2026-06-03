@@ -178,7 +178,7 @@ class LedgerPwCliTest {
             }
 
         assertTrue(error.message!!.contains("Push blocked by companion safety policy"))
-        assertTrue(error.message!!.contains("commence ou finit par un espace"))
+        assertTrue(error.message!!.contains("starts or ends with whitespace"))
     }
 
     @Test

@@ -1,118 +1,116 @@
 # Fuzzing Tracker
 
-Ce document suit les familles de fuzzers à implémenter contre l'app Ledger Passwords via la CLI et Speculos.
+This document follows the families of fuzzers to be implemented against the Ledger Passwords app via the CLI and Speculos.
 
-Objectif :
+Objective:
 
-- trouver les crashs applicatifs ;
-- trouver les hangs, timeouts et erreurs APDU ;
-- détecter les corruptions de metadata ;
-- identifier les scénarios qui pourraient correspondre à un reset ou à un comportement dangereux sur vrai device.
+- find application crashes;
+- find hangs, timeouts and APDU errors;
+- detect metadata corruption;
+- identify scenarios that could correspond to a reset or dangerous behavior on a real device.
 
-Règle de travail :
+Work rule:
 
-1. implémenter un fuzzer ;
-2. lancer ses tests ;
-3. mettre à jour ce fichier ;
-4. passer au suivant.
+1. implement a fuzzer;
+2. launch your tests;
+3. update this file;
+4. move on to the next one.
 
-## Légende
+## Legend
 
-- `pending` : pas commencé
-- `in_progress` : en cours d'implémentation ou d'investigation
-- `done` : implémenté et validé
-- `blocked` : dépendance ou limite externe
+- `pending`: not started
+- `in_progress`: currently being implemented or investigated
+- `done`: implemented and validated
+- `blocked`: dependence or external limit
 
-## Oracles communs
+## Common oracles
 
-Les fuzzers peuvent réutiliser un ou plusieurs oracles communs :
+Fuzzers can reuse one or more common oracles:
 
-- crash du process Speculos ;
-- sortie APDU non `0x9000` là où le scénario attend un succès ;
-- timeout lecture/écriture ;
-- écran inattendu ;
-- écran figé ;
-- divergence `push -> dump -> decode` ;
-- corruption de metadata relue ;
-- exception levée par la CLI ou le harness ;
-- redémarrage apparent de l'app dans Speculos ;
-- sortie hors du flux UI attendu.
+- crash of the Speculos process;
+- APDU output not `0x9000` where the scenario expects a success;
+- read/write timeout;
+- unexpected screen;
+- frozen screen;
+- divergence `push -> dump -> decode`;
+- corruption of reread metadata;
+- exception thrown by the CLI or the harness;
+- apparent restart of the app in Speculos;
+- output outside the expected UI flow.
 
-## Ordre d'implémentation recommandé
+## Recommended implementation order
 
-1. `FZ-14` corpus ciblé dangerous nicknames
-2. `FZ-04` stateful de scénarios métier
-3. `FZ-02` mutation de metadata valides
-4. `FZ-05` UI par navigation bouton
+1. `FZ-14` corpus targeted dangerous nicknames
+2. `FZ-04` stateful business scenarios
+3. `FZ-02` mutation of valid metadata
+4. `FZ-05` UI by button navigation
 5. `FZ-10` charset-oriented
 6. `FZ-08` round-trip
-7. `FZ-12` persistance multi-session
-8. `FZ-03` APDU bas niveau
+7. `FZ-12` multi-session persistence
+8. `FZ-03` Low level APDU
 9. `FZ-06` chaos timing
-10. `FZ-11` Unicode/normalisation
-11. `FZ-09` listes/menus
-12. `FZ-13` prompts APDU + UI mêlés
-13. `FZ-01` metadata génératives
-14. `FZ-07` différentiel
-15. `FZ-15` régression orientée incident
-16. `FZ-16` oracles multiples consolidés
+10. `FZ-11` Unicode/normalization
+11. `FZ-09` lists/menus
+12. `FZ-13` mixed APDU + UI prompts
+13. `FZ-01` generative metadata
+14. `FZ-07` differential
+15. `FZ-15` incident-oriented regression
+16. `FZ-16` consolidated multiple oracles
 
-## Backlog détaillé
+## Detailed backlog
 
-### [x] FZ-01 Metadata génératives
+### [x] FZ-01 Generative Metadata
 
 - `status`: `done`
-- `scope`: génération de `backup.json` et de raw metadata synthétiques
+- `scope`: generation of `backup.json` and synthetic raw metadata
 - `focus`:
-  - nicknames vides, courts, longs, 19 octets exacts, 20+ octets
-  - UTF-8 multi-octets
-  - espaces, tabs, newlines, caractères invisibles
-  - volumes proches de `storage_size`
+  - empty nicknames, short, long, 19 exact bytes, 20+ bytes
+  - Multi-byte UTF-8
+  - spaces, tabs, newlines, invisible characters
+  - volumes close to `storage_size`
 - `entrypoint`: CLI `device push/pull/verify` via Speculos
 - `oracles`:
   - APDU error
   - timeout
-  - crash
-  - dump corrompu après push
+  - crashes
+  - corrupt dump after push
 - `notes`:
-  - implémenté dans `scripts/fuzz-generated-metadata.py`
-  - synthèse de corpus `backup.json` valides et de raw metadata synthétiques sans passer par les garde-fous du companion
-  - campagnes validées:
+  - implemented in `scripts/fuzz-generated-metadata.py`
+  - synthesis of valid `backup.json` corpora and synthetic raw metadata without going through the companion guardrails
+  - validated campaigns:
     - `empty_control_pull`
     - `json_maxcount_177_pull`
     - `raw_storage_edge_186_show_last`
     - `raw_overlong_20byte_show`
     - `raw_blank_plain_space_show_second`
-  - findings confirmés:
-    - `empty_control_pull` passe sans dérive
-    - `json_maxcount_177_pull` accepte un corpus JSON dense de `177` entrées, mais le `pull` final relit seulement `11` entrées, avec la dernière déjà corrompue en `vm010-xxxxxxxxxxx\\0\\0`
-    - `raw_storage_edge_186_show_last` et `raw_overlong_20byte_show` sont rejetés proprement pendant `LOAD_METADATAS` à l'offset `4080` avec `sw=0x6f10`
-    - `raw_blank_plain_space_show_second` ne crashe pas, mais `show` sur la position `2` sélectionne l'entrée vide au lieu de `plain-target`
+  - confirmed findings:
+    - `empty_control_pull` passes without drift
+    - `json_maxcount_177_pull` accepts a dense JSON corpus of `177` entries, but the final `pull` only rereads `11` entries, with the last one already corrupted to `vm010-xxxxxxxxxxx\\0\\0`
+    - `raw_storage_edge_186_show_last` and `raw_overlong_20byte_show` are rejected cleanly during `LOAD_METADATAS` at the offset `4080` with `sw=0x6f10`
+    - `raw_blank_plain_space_show_second` does not crash, but `show` on position `2` selects empty entry instead of `plain-target`
   - conclusion:
-    - l'app rejette correctement certains dépassements raw proches de la limite de stockage
-    - en revanche, les gros corpus JSON et les listes contenant vide + espace révèlent encore une corruption/troncature et une mauvaise sélection d'item
-
-### [x] FZ-02 Mutation de metadata valides
+    - the app correctly rejects certain raw excesses close to the storage limit
+    - on the other hand, large JSON corpora and lists containing empty + space still reveal corruption/truncation and poor item selection### [x] FZ-02 Mutation of valid metadata
 
 - `status`: `done`
-- `scope`: partir d'un raw valide puis muter les octets
+- `scope`: start from a valid raw then mutate the bytes
 - `focus`:
-  - `length` faux
-  - type/kind incohérent
-  - charset mask étrange
-  - entrée tronquée
-  - fin de buffer cassée
-  - padding non nul
-- `entrypoint`: APDU `LOAD_METADATAS` puis scénarios UI/CLI de lecture
+  - `length` false
+  - inconsistent type/kind
+  - strange charset mask
+  - truncated entry
+  - end of buffer broken
+  - non-zero padding
+- `entrypoint`: APDU `LOAD_METADATAS` then UI/CLI reading scenarios
 - `oracles`:
-  - crash
-  - hang
-  - corruption relue
-  - comportement anormal sur `show/type/delete`
+  - crashes
+  -hang
+  - corruption reread
+  - abnormal behavior on `show/type/delete`
 - `notes`:
-  - implémenté dans `scripts/fuzz-metadata-mutations.py`
-  - injection du raw muté via APDU `LOAD_METADATAS`, puis vérifications CLI/UI via Speculos
-  - cas explicitement testés:
+  - implemented in `scripts/fuzz-metadata-mutations.py`
+  - injection of the mutated raw via APDU `LOAD_METADATAS`, then CLI/UI verifications via Speculos
+  - explicitly tested cases:
     - `first_len_plus4`
     - `first_charset_ff`
     - `second_kind_unknown`
@@ -120,31 +118,31 @@ Les fuzzers peuvent réutiliser un ou plusieurs oracles communs :
     - `second_len_overflow`
     - `terminator_removed_tail_ff`
     - `padding_non_zero_after_terminator`
-  - findings confirmés:
-    - `first_len_plus4`, `second_kind_unknown`, `second_len_overflow` et `terminator_removed_tail_ff` sont rejetés pendant `LOAD_METADATAS` avec `sw=0x6f10`
-    - `first_charset_ff` et `padding_non_zero_after_terminator` sont acceptés sans crash ni corruption relue
-    - `second_len_plus1` est accepté, puis `device pull` relit silencieusement un nickname corrompu `gmail\\0`
-    - sur ce même seed `second_len_plus1`, `type password` du second item réussit, mais `show password` et `delete password` du second item font crasher `app-passwords` sous Speculos avec `signal 11`
-  - ce seed `second_len_plus1` doit être conservé comme cas de régression prioritaire
+  - confirmed findings:
+    - `first_len_plus4`, `second_kind_unknown`, `second_len_overflow` and `terminator_removed_tail_ff` are rejected during `LOAD_METADATAS` with `sw=0x6f10`
+    - `first_charset_ff` and `padding_non_zero_after_terminator` are accepted without crash or corruption reread
+    - `second_len_plus1` is accepted, then `device pull` silently rereads a corrupt nickname `gmail\\0`
+    - on this same seed `second_len_plus1`, `type password` of the second item succeeds, but `show password` and `delete password` of the second item crash `app-passwords` under Speculos with `signal 11`
+  - this seed `second_len_plus1` must be kept as a priority regression case
 
-### [x] FZ-03 APDU bas niveau
+### [x] FZ-03 Low Level APDU
 
 - `status`: `done`
-- `scope`: fuzz direct du protocole `GET_APP_CONFIG`, `DUMP_METADATAS`, `LOAD_METADATAS`
+- `scope`: direct fuzz of the protocol `GET_APP_CONFIG`, `DUMP_METADATAS`, `LOAD_METADATAS`
 - `focus`:
-  - chunks invalides
-  - tailles hors contrat
-  - séquences `p1` incohérentes
-  - payloads trop courts / trop longs
-- `entrypoint`: harness APDU bas niveau au-dessus de `SpeculosTransport`
+  - invalid chunks
+  - sizes outside of contract
+  - inconsistent `p1` sequences
+  - payloads too short / too long
+- `entrypoint`: harness low level APDU above `SpeculosTransport`
 - `oracles`:
-  - status words inattendus
+  - unexpected status words
   - deadlocks
-  - crash
+  - crashes
 - `notes`:
-  - implémenté dans `scripts/fuzz-low-level-apdu.py`
-  - s'appuie sur l'échange direct socket/APDU ajouté au harness partagé `scripts/speculos_fuzz_lib.py`
-  - campagnes validées:
+  - implemented in `scripts/fuzz-low-level-apdu.py`
+  - relies on the direct socket/APDU exchange added to the shared harness `scripts/speculos_fuzz_lib.py`
+  - validated campaigns:
     - `load_zero_length_nonfinal_then_valid_final`
     - `load_partial_prefix_abandon`
     - `load_valid_final_then_extra_nonfinal`
@@ -152,35 +150,33 @@ Les fuzzers peuvent réutiliser un ou plusieurs oracles communs :
     - `load_duplicate_first_chunk_then_final_remainder`
     - `dump_bad_p1_payload_then_pull`
     - `dump_partial_then_info_then_pull`
-  - findings confirmés:
-    - `load_partial_prefix_abandon` persiste silencieusement un état partiel relu comme `load-alph`
-    - `load_zero_length_nonfinal_then_valid_final` persiste aussi `load-alph` au lieu de `load-alpha` / `load-beta`
-    - `load_valid_final_then_extra_nonfinal` vide complètement le vault relu
-    - `load_out_of_order_two_chunk` et `load_duplicate_first_chunk_then_final_remainder` n'échouent pas proprement et relisent un état corrompu `bulk-0`, `bulk-0`
-    - `dump_bad_p1_payload_then_pull` et `dump_partial_then_info_then_pull` finissent tous deux en hang/timeout avec l'écran bloqué sur `Transfer metadatas ?`
+  - confirmed findings:
+    - `load_partial_prefix_abandon` silently persists a partial state read back as `load-alph`
+    - `load_zero_length_nonfinal_then_valid_final` also persists `load-alph` instead of `load-alpha` / `load-beta`
+    - `load_valid_final_then_extra_nonfinal` completely empties the relu vault
+    - `load_out_of_order_two_chunk` and `load_duplicate_first_chunk_then_final_remainder` do not fail cleanly and reread a corrupt state `bulk-0`, `bulk-0`
+    - `dump_bad_p1_payload_then_pull` and `dump_partial_then_info_then_pull` both end up in hang/timeout with the screen stuck on `Transfer metadatas ?`
   - conclusion:
-    - la couche APDU seule suffit à casser l'état de l'app sans passer par l'UI
-    - les problèmes sont ici des corruptions silencieuses et des deadlocks de dump, pas seulement des crashs d'écran ou de sélection de liste
-
-### [x] FZ-04 Stateful de scénarios métier
+    - the APDU layer alone is enough to break the state of the app without going through the UI
+    - the problems here are silent corruptions and dump deadlocks, not just screen or list selection crashes### [x] FZ-04 Stateful of business scenarios
 
 - `status`: `done`
-- `scope`: séquences réalistes ou semi-réalistes de haut niveau
+- `scope`: high-level realistic or semi-realistic sequences
 - `focus`:
   - `push -> show password`
   - `push -> type password`
   - `push -> delete`
   - `push -> pull -> verify`
   - `load invalid -> list -> show`
-- `entrypoint`: CLI + automation boutons Speculos
+- `entrypoint`: CLI + automation buttons Speculos
 - `oracles`:
-  - crash
+  - crashes
   - timeout
-  - divergence entre état poussé et état relu
+  - divergence between pushed state and read state
 - `notes`:
-  - implémenté dans `scripts/fuzz-stateful-scenarios.py`
-  - harness durci pour utiliser `speculos-auto-approve.sh`, des ports dynamiques par scénario, et une navigation `home_to_menu()` tolérante aux retours UI intermédiaires
-  - scénarios validés:
+  - implemented in `scripts/fuzz-stateful-scenarios.py`
+  - hardened harness to use `speculos-auto-approve.sh`, dynamic ports per scenario, and `home_to_menu()` navigation tolerant of intermediate UI feedback
+  - validated scenarios:
     - `sofian_push_show_pull`
     - `sofian_push_type_pull`
     - `sofian_push_delete_pull`
@@ -188,353 +184,343 @@ Les fuzzers peuvent réutiliser un ou plusieurs oracles communs :
     - `leading_space_push_type_pull`
     - `multi_type_second_delete_first_pull`
     - `multi_push_verify_pull`
-  - finding confirmé:
-    - le seed `["alpha", "beta"]` dans `multi_show_second_pull` provoque un crash reproductible de `app-passwords` sous Speculos pendant `device push`
-    - signature observée: `Remote end closed connection without response` côté CLI, puis `The app crashed with signal 11` dans le log Speculos
-  - ce seed doit être conservé comme cas de régression pour les prochains fuzzers
+  - confirmed finding:
+    - the seed `["alpha", "beta"]` in `multi_show_second_pull` causes a reproducible crash of `app-passwords` under Speculos during `device push`
+    - signature observed: `Remote end closed connection without response` on the CLI side, then `The app crashed with signal 11` in the Speculos log
+  - this seed must be kept as a regression case for the next fuzzers
 
-### [x] FZ-05 UI par navigation bouton
+### [x] FZ-05 UI by button navigation
 
 - `status`: `done`
-- `scope`: appuis `left/right/both` pseudo-aléatoires mais structurés
+- `scope`: pseudo-random but structured supports `left/right/both`
 - `focus`:
-  - navigation chaotique
-  - validation/rejet rapides
-  - changement d'écran inattendu
-- `entrypoint`: API boutons Speculos
+  - chaotic navigation
+  - rapid validation/rejection
+  - unexpected screen change
+- `entrypoint`: Speculos buttons API
 - `oracles`:
-  - écran figé
-  - crash
-  - retour home anormal
+  - frozen screen
+  - crashes
+  - abnormal return home
 - `notes`:
-  - implémenté dans `scripts/fuzz-ui-navigation.py`
-  - le runner prépare l'état via CLI/Speculos ou injection raw, exécute une marche pseudo-aléatoire sur les boutons, puis termine par `device info` et `device pull`
-  - cas explicitement testés:
+  - implemented in `scripts/fuzz-ui-navigation.py`
+  - the runner prepares the state via CLI/Speculos or raw injection, executes a pseudo-random walk on the buttons, then ends with `device info` and `device pull`
+  - explicitly tested cases:
     - `empty_home_walk_seed11`
     - `single_entry_walk_seed21`
     - `leading_space_walk_seed22`
     - `multi_entry_walk_seed31`
     - `mutated_second_len_plus1_walk_seed41`
-  - findings confirmés:
-    - `single_entry_walk_seed21` fait crasher `app-passwords` sous Speculos après une navigation chaotique sur un état valide contenant `["sofian terki"]`
-    - signature observée: `Remote end closed connection without response` côté CLI, puis `The app crashed with signal 11` dans le log Speculos
-    - les marches chaotiques sur état vide et sur vault multi-entrée peuvent créer de nouveaux identifiants via l'UI seule, par exemple `["A", "password1", "password2", "password3"]` et `["A", "github", "gmail", "proton"]`
-    - le seed corrompu `second_len_plus1` survit aussi à la navigation chaotique et laisse un état relu anormal `["00", "github", "gmail\\0"]`
-  - le seed `single_entry_walk_seed21` doit être conservé comme cas de régression pour les fuzzers suivants
+  - confirmed findings:
+    - `single_entry_walk_seed21` crashes `app-passwords` under Speculos after chaotic navigation on a valid state containing `["sofian terki"]`
+    - signature observed: `Remote end closed connection without response` on the CLI side, then `The app crashed with signal 11` in the Speculos log
+    - chaotic walks on empty state and on multi-entry vault can create new identifiers via the UI alone, for example `["A", "password1", "password2", "password3"]` and `["A", "github", "gmail", "proton"]`
+    - the corrupted seed `second_len_plus1` also survives chaotic navigation and leaves an abnormal reread state `["00", "github", "gmail\\0"]`
+  - the seed `single_entry_walk_seed21` must be kept as a regression case for the following fuzzers
 
 ### [x] FZ-06 Chaos timing
 
 - `status`: `done`
-- `scope`: variation des délais entre APDU et boutons
+- `scope`: variation of delays between APDU and buttons
 - `focus`:
-  - micro-délais aléatoires
-  - rafales de requêtes
-  - enchaînement write puis read immédiat
+  - random micro-delays
+  - bursts of requests
+  - write sequence then read immediately
 - `entrypoint`: CLI + automation Speculos
 - `oracles`:
   - timeout
-  - réponse incomplète
-  - état UI/APDU bloqué
+  - incomplete answer
+  - UI/APDU status blocked
 - `notes`:
-  - implémenté dans `scripts/fuzz-chaos-timing.py`
-  - ce runner mélange deux familles de stress:
-    - approbation manuelle jitterée des prompts `Overwrite metadatas` et `Approve`
-    - rafales de commandes CLI avec micro-délais et concurrence de lectures
-  - cas explicitement testés:
+  - implemented in `scripts/fuzz-chaos-timing.py`
+  - this runner mixes two families of stress:
+    - jittered manual approval of `Overwrite metadatas` and `Approve` prompts
+    - CLI command bursts with micro-delays and read concurrency
+  - explicitly tested cases:
     - `sofian_manual_push_show_seed61`
     - `sofian_push_verify_pull_burst_seed62`
     - `alpha_beta_manual_push_show_second_seed63`
     - `leading_space_manual_push_delete_seed64`
     - `multi_concurrent_reads_seed65`
-  - findings confirmés:
-    - `alpha_beta_manual_push_show_second_seed63` fait encore crasher `app-passwords` sous Speculos avec `Remote end closed connection without response`, puis `The app crashed with signal 11`
-    - ce crash reste reproductible même avec approbation jitterée des prompts, donc il n'est pas lié à un timing trop "propre" du harness
-    - `multi_concurrent_reads_seed65` provoque de façon reproductible un timeout côté CLI sur `device info` quand plusieurs lectures (`info`, `pull`, `verify`, `pull`) sont lancées avec de faibles décalages
-    - dans ce cas concurrent, l'app ne crashe pas sous Speculos, mais l'état APDU/transport devient non fiable et une commande reste bloquée jusqu'au timeout
-  - les cas `sofian_manual_push_show_seed61`, `sofian_push_verify_pull_burst_seed62` et `leading_space_manual_push_delete_seed64` passent avec conservation de l'état attendu
-
-### [x] FZ-07 Différentiel
+  - confirmed findings:
+    - `alpha_beta_manual_push_show_second_seed63` still crashes `app-passwords` under Speculos with `Remote end closed connection without response`, then `The app crashed with signal 11`
+    - this crash remains reproducible even with jittery approval of the prompts, so it is not linked to too "clean" harness timing
+    - `multi_concurrent_reads_seed65` reproducibly causes a timeout on the CLI side on `device info` when several reads (`info`, `pull`, `verify`, `pull`) are launched with small offsets
+    - in this concurrent case, the app does not crash under Speculos, but the APDU/transport state becomes unreliable and a command remains blocked until the timeout
+  - the cases `sofian_manual_push_show_seed61`, `sofian_push_verify_pull_burst_seed62` and `leading_space_manual_push_delete_seed64` pass with preservation of the expected state### [x] FZ-07 Differential
 
 - `status`: `done`
-- `scope`: rejouer le même corpus sur plusieurs versions de `app-passwords`
+- `scope`: replay the same corpus on several versions of `app-passwords`
 - `focus`:
   - 1.3.0 vs 1.3.1 vs HEAD
-  - divergence de crash, output, prompts
-- `entrypoint`: build multi-version + Speculos
+  - crash divergence, output, prompts
+- `entrypoint`: multi-version build + Speculos
 - `oracles`:
-  - mismatch comportemental
-  - régression entre versions
+  - behavioral mismatch
+  - regression between versions
 - `notes`:
-  - implémenté dans `scripts/fuzz-differential.py`
-  - versions comparées:
+  - implemented in `scripts/fuzz-differential.py`
+  - compared versions:
     - `nanos_plus_1_3_0` via `nanos+_1.6.0_1.3.0_sdk_v26.0.2`
     - `nanos_plus_1_3_1` via `nanos+_1.6.1_1.3.1_sdk_v26.1.7`
     - `master`
-  - corpus rejoué:
+  - replayed corpus:
     - `sofian_show_first`
     - `leading_space_delete_first`
     - `alpha_beta_show_second`
     - `second_len_plus1_show_second`
-  - findings confirmés:
-    - `leading_space_delete_first` passe sur `1.3.0`, `1.3.1` et `master`
-    - `sofian_show_first` passe sur `1.3.1` et `master`
-    - `alpha_beta_show_second` et `second_len_plus1_show_second` font crasher `app-passwords` sur `1.3.1` et `master` avec `Remote end closed connection without response`, puis `The app crashed with signal 11`
-    - sur `1.3.0`, les cas qui supposent l'accès direct à `Passwords list` ne sont pas comparables avec le même harness: l'automation tombe sur `Create password` puis timeoute
-  - interprétation:
-    - la campagne confirme une divergence réelle de flux UI/menu entre `1.3.0` et `1.3.1+`
-    - les crashs `alpha/beta` et `second_len_plus1` restent présents au moins sur `1.3.1` et `master`
-    - un premier échec transitoire `master/sofian_show_first` a été infirmé par une repro ciblée verte; il ne doit pas être compté comme finding
+  - confirmed findings:
+    - `leading_space_delete_first` changes to `1.3.0`, `1.3.1` and `master`
+    - `sofian_show_first` changes to `1.3.1` and `master`
+    - `alpha_beta_show_second` and `second_len_plus1_show_second` cause `app-passwords` to crash on `1.3.1` and `master` with `Remote end closed connection without response`, then `The app crashed with signal 11`
+    - on `1.3.0`, the cases which suppose direct access to `Passwords list` are not comparable with the same harness: the automation falls on `Create password` then timeout
+  - interpretation:
+    - the campaign confirms a real divergence of UI/menu flow between `1.3.0` and `1.3.1+`
+    - the crashes `alpha/beta` and `second_len_plus1` remain present at least on `1.3.1` and `master`
+    - a first transient failure `master/sofian_show_first` was overturned by a green targeted repro; it should not be counted as finding
 
-### [x] FZ-08 Round-trip
-
-- `status`: `done`
-- `scope`: vérifier les invariants `encode -> load -> dump -> decode`
-- `focus`:
-  - conservation des nicknames
-  - conservation des charsets
-  - stabilité sur cycles répétés
-- `entrypoint`: CLI et codec local
-- `oracles`:
-  - divergence byte-level
-  - divergence sémantique
-- `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-roundtrip.py`
-- `test status`:
-  - smoke validé sur `sofian_space_three_cycles` et `embedded_raw_preferred_three_cycles`
-  - run complet validé sur `5` corpus pendant `3` cycles chacun
-- `findings`:
-  - aucun crash ni dérive observés sur cette campagne
-  - `sofian terki` reste stable sur `3` cycles `push -> verify -> pull`
-  - le corpus multi-entrée `github/gmail/proton` conserve exactement nicknames, charsets et bytes bruts
-  - le nickname UTF-8 `éééééééééa` à exactement `19` octets reste stable sur `3` cycles
-  - un `backup.json` avec `raw_metadatas` embarqué reste piloté par le raw: `parsed-loses` est ignoré au profit de `raw-wins`, sans dérive après `3` cycles
-- `notes`: bon filet de sécurité pour les régressions ; les seeds instables restent à chercher dans les fuzzers UI/stateful, pas dans le round-trip pur
-
-### [x] FZ-09 Listes et menus
+### [x] FZ-08 Round trip
 
 - `status`: `done`
-- `scope`: stress des listes de passwords et de la navigation de menu
+- `scope`: check invariants `encode -> load -> dump -> decode`
 - `focus`:
-  - beaucoup d'entrées
-  - noms très proches
-  - largeurs UI extrêmes
-  - premiers / derniers index
-- `entrypoint`: push corpus puis navigation UI
+  - conservation of nicknames
+  - conservation of carts
+  - stability over repeated cycles
+- `entrypoint`: CLI and local codec
 - `oracles`:
-  - crash lors du rendu
-  - mauvais item sélectionné
-  - écran incohérent
+  - byte-level divergence
+  - semantic divergence
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-list-menus.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-roundtrip.py`
 - `test status`:
-  - smoke ciblé validé sur le harness, puis campagne complète exécutée sur `5` cas
-  - amélioration du harness `home_to_menu()` pour revenir proprement au menu depuis les écrans `show password` et `PASSWORD HAS BEEN WRITTEN`
+  - smoke validated on `sofian_space_three_cycles` and `embedded_raw_preferred_three_cycles`
+  - complete run validated on `5` corpus for `3` cycles each
 - `findings`:
-  - `dense_twelve_show_delete_last`: un corpus dense de `12` entrées ASCII (`slot-01` à `slot-12`) fait crasher `app-passwords` avec `signal 11` juste après `LOAD_METADATAS`
-  - `sameprefix_19bytes_delete_third`: sur `sameprefixvalue-001..005`, la suppression demandée en position `3` retire en réalité le dernier item `sameprefixvalue-005`
-  - `sameprefix_19bytes_type_last_delete_second`: après un `type` du dernier item, la suppression demandée en position `2` retire en réalité `sameprefixvalue-103` au lieu de `sameprefixvalue-102`
-  - `reindex_delete_first_then_last`: un corpus `reindex-01..06` fait crasher `app-passwords` avec `signal 11`
-  - `mixed_widths_show_first_middle_last`: un corpus mixant `a`, `medium-name`, un nickname UTF-8 à `19` octets et deux entrées longues ASCII fait aussi crasher `app-passwords` avec `signal 11`
-- `notes`: campagne extrêmement rentable ; elle révèle à la fois des crashs de rendu/liste et des sélections d'item incohérentes dans les flows `Delete`
+  - no crashes or drifts observed during this campaign
+  - `sofian terki` remains stable on `3` cycles `push -> verify -> pull`
+  - the multi-input corpus `github/gmail/proton` exactly preserves nicknames, charsets and raw bytes
+  - the UTF-8 nickname `éééééééééa` at exactly `19` bytes remains stable over `3` cycles
+  - a `backup.json` with embedded `raw_metadatas` remains controlled by the raw: `parsed-loses` is ignored in favor of `raw-wins`, without drift after `3` cycles
+- `notes`: good safety net for regressions; unstable seeds are to be found in the UI/stateful fuzzers, not in the pure round-trip### [x] FZ-09 Lists and menus
+
+- `status`: `done`
+- `scope`: stress of password lists and menu navigation
+- `focus`:
+  - lots of entries
+  - very similar names
+  - extreme UI widths
+  - first/last indexes
+- `entrypoint`: push corpus then UI navigation
+- `oracles`:
+  - crash when rendering
+  - wrong item selected
+  - inconsistent screen
+- `implementation`:
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-list-menus.py`
+- `test status`:
+  - targeted smoke validated on the harness, then complete campaign executed on `5` case
+  - improvement of the harness `home_to_menu()` to return properly to the menu from the screens `show password` and `PASSWORD HAS BEEN WRITTEN`
+- `findings`:
+  - `dense_twelve_show_delete_last`: a dense corpus of `12` ASCII entries (`slot-01` to `slot-12`) crashes `app-passwords` with `signal 11` just after `LOAD_METADATAS`
+  - `sameprefix_19bytes_delete_third`: on `sameprefixvalue-001..005`, the deletion requested in position `3` actually removes the last item `sameprefixvalue-005`
+  - `sameprefix_19bytes_type_last_delete_second`: after a `type` of the last item, the deletion requested in position `2` actually removes `sameprefixvalue-103` instead of `sameprefixvalue-102`
+  - `reindex_delete_first_then_last`: a corpus `reindex-01..06` crashes `app-passwords` with `signal 11`
+  - `mixed_widths_show_first_middle_last`: a corpus mixing `a`, `medium-name`, a UTF-8 nickname with `19` bytes and two long ASCII entries also crashes `app-passwords` with `signal 11`
+- `notes`: extremely profitable campaign; it reveals both rendering/list crashes and inconsistent item selections in flows `Delete`
 
 ### [x] FZ-10 Charset-oriented
 
 - `status`: `done`
-- `scope`: exploration ciblée des bitmasks de charset
+- `scope`: targeted exploration of charset bitmasks
 - `focus`:
   - `0x00`, `0xFF`
-  - bits isolés
-  - combinaisons rares
-  - masks invalides injectés via mutation
-- `entrypoint`: générateur de corpus + `show/type password`
+  - isolated bits
+  - rare combinations
+  - invalid masks injected via mutation
+- `entrypoint`: corpus generator + `show/type password`
 - `oracles`:
-  - crash génération
-  - output invalide
-  - comportement incohérent
+  - crash generation
+  - invalid output
+  - inconsistent behavior
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-charset-oriented.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-charset-oriented.py`
 - `test status`:
-  - smoke validé sur `official_vectors_gmail_and_alias` et `raw_mask00_alias_allsets`
-  - campagne complète validée sur `8` cas sans failure
+  - smoke validated on `official_vectors_gmail_and_alias` and `raw_mask00_alias_allsets`
+  - complete campaign validated on `8` case without failure
 - `findings`:
-  - les vecteurs officiels `app-passwords` sont respectés exactement pour `gmail` sur `0x01`, `0x03`, `0x07`, `0x0F`, `0x1F`, `0x3F`, `0x7F`, `0xFF`
-  - le bitmask `0x00` est bien traité comme alias de `ALL_SETS` dans le chemin de génération: il produit exactement le même mot de passe que `0xFF`
-  - sur `raw_mask00_alias_allsets`, le `pull` re-canonise le charset en `ALL_SETS` côté JSON tout en conservant le byte raw `0x00`
-  - les masks singleton se comportent comme attendu: `0x08` génère `--------------------`, `0x10` génère `____________________`, `0x20` génère `20` espaces
-  - les masks `0x40`, `0x80` et le combo rare `0x81` ne craschent pas et restent cohérents en `show/type/pull`
-- `notes`: aucune régression trouvée sur cette campagne ; les problèmes confirmés restent concentrés sur la logique de listes/sélection plutôt que sur le moteur de génération charset
-
-### [x] FZ-11 Unicode et normalisation
+  - the official vectors `app-passwords` are respected exactly for `gmail` on `0x01`, `0x03`, `0x07`, `0x0F`, `0x1F`, `0x3F`, `0x7F`, `0xFF`
+  - the bitmask `0x00` is indeed treated as an alias of `ALL_SETS` in the generation path: it produces exactly the same password as `0xFF`
+  - on `raw_mask00_alias_allsets`, `pull` re-canonizes the charset to `ALL_SETS` on the JSON side while retaining the raw byte `0x00`
+  - singleton masks behave as expected: `0x08` generates `--------------------`, `0x10` generates `____________________`, `0x20` generates `20` spaces
+  - the masks `0x40`, `0x80` and the rare combo `0x81` do not crack and remain consistent in `show/type/pull`
+- `notes`: no regression found on this campaign; confirmed issues remain focused on list/selection logic rather than the charset generation engine### [x] FZ-11 Unicode and standardization
 
 - `status`: `done`
-- `scope`: nicknames Unicode piégeux
+- `scope`: tricky Unicode nicknames
 - `focus`:
   - NFC/NFD
   - combining marks
   - bidi
   - zero-width
-  - séparateurs Unicode
-- `entrypoint`: push via CLI, puis lecture UI
+  - Unicode separators
+- `entrypoint`: push via CLI, then read UI
 - `oracles`:
-  - crash
-  - mismatch affichage / stockage
-  - comparaison cassée
+  - crashes
+  - display/storage mismatch
+  - broken comparison
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-unicode-normalization.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-unicode-normalization.py`
 - `test status`:
-  - smoke validé sur `nfc_nfd_delete_second` et `zero_width_delete_second`
-  - campagne complète validée sur `5` cas, avec `5` failures reproductibles
+  - smoke validated on `nfc_nfd_delete_second` and `zero_width_delete_second`
+  - complete campaign validated on `5` cases, with `5` reproducible failures
 - `findings`:
-  - `nfc_nfd_delete_second`: en demandant la suppression du `2e` item sur `["é", "é", "plain"]`, l'app retire en réalité `plain` et laisse l'entrée NFD `é`
-  - `nbsp_delete_second`: en demandant la suppression du `2e` item sur `["foo bar", "foo\\u00a0bar", "plain"]`, l'app retire en réalité `plain` et laisse l'entrée `NBSP`
-  - `zero_width_delete_second`: en demandant la suppression du `2e` item sur `["zerowidth", "zero\\u200bwidth", "plain"]`, l'app retire en réalité `plain` et laisse l'entrée avec zéro-width
-  - `bidi_delete_second`: en demandant la suppression du `2e` item sur `["abc123", "abc\\u202e123", "plain"]`, l'app retire en réalité `plain` et laisse l'entrée bidi
-  - `mixed_unicode_show_all`: un corpus mixte Unicode fait crasher `app-passwords` sous Speculos avec `Remote end closed connection without response`, puis `The app crashed with signal 11`
-- `notes`: les confusables Unicode aggravent le même drift de sélection déjà vu en `FZ-09`, avec en plus un crash confirmé sur corpus Unicode mixte
+  - `nfc_nfd_delete_second`: when requesting deletion of the second item on `["é", "é", "plain"]`, the app actually removes `plain` and leaves the NFD entry `é`
+  - `nbsp_delete_second`: when requesting deletion of the second item on `["foo bar", "foo\\u00a0bar", "plain"]`, the app actually removes `plain` and leaves the `NBSP` entry
+  - `zero_width_delete_second`: when requesting deletion of the second item on `["zerowidth", "zero\\u200bwidth", "plain"]`, the app actually removes `plain` and leaves the zero-width entry
+  - `bidi_delete_second`: when requesting deletion of the second item on `["abc123", "abc\\u202e123", "plain"]`, the app actually removes `plain` and leaves the bidi entry
+  - `mixed_unicode_show_all`: a mixed Unicode corpus crashes `app-passwords` under Speculos with `Remote end closed connection without response`, then `The app crashed with signal 11`
+- `notes`: Unicode confusionables aggravate the same selection drift already seen in `FZ-09`, with the addition of a crash confirmed on mixed Unicode corpus
 
-### [x] FZ-12 Persistance multi-session
+### [x] FZ-12 Multi-session persistence
 
 - `status`: `done`
-- `scope`: écrire un état, redémarrer l'app, relire
+- `scope`: write a report, restart the app, reread
 - `focus`:
   - `push -> restart -> show`
   - `push -> restart -> type`
   - `push -> restart -> list`
-- `entrypoint`: Speculos relancé entre les étapes
+- `entrypoint`: Speculos revived between stages
 - `oracles`:
-  - crash après reboot
-  - perte/corruption de metadata
+  - crash after reboot
+  - loss/corruption of metadata
 - `implementation`:
-  - wrapper Speculos persisté : `scripts/run-speculos-passwords.sh`
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-multi-session-persistence.py`
+  - persisted Speculos wrapper: `scripts/run-speculos-passwords.sh`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-multi-session-persistence.py`
 - `test status`:
-  - smoke validé sur `sofian_restart_list` et `alpha_beta_restart_show_second`
-  - campagne complète validée sur `6` cas, avec `6` failures reproductibles
+  - smoke validated on `sofian_restart_list` and `alpha_beta_restart_show_second`
+  - complete campaign validated on `6` cases, with `6` reproducible failures
 - `findings`:
-  - `sofian_restart_list`, `sofian_restart_show_first`, `sofian_restart_type_first`: après restart, le dump relit `["sofian terki", "password1", "password2", "password3"]` au lieu de `["sofian terki"]`
-  - `alpha_beta_restart_show_second`: après restart, le dump relit `["alpha", "beta", "password1", "password2", "password3"]` et un `show` en position `2` affiche `password1` au lieu de `beta`
-  - `dense_twelve_restart_show_last`: une liste dense de `12` entrées ASCII crashe `app-passwords` après restart avec `Remote end closed connection without response`, puis `The app crashed with signal 11`
-  - `second_len_plus1_restart_show_second`: le raw corrompu accepté survit au restart, mais le dump relit `["github", "gmail\\0", "password1", "password2", "password3"]` et un `show` en position `2` affiche `password1`
-- `notes`: le restart Speculos avec NVRAM persistée révèle une pollution systématique par `password1/password2/password3`, qui se combine ensuite avec les bugs de sélection déjà vus sur les listes
-
-### [x] FZ-13 Prompts APDU + UI mêlés
+  - `sofian_restart_list`, `sofian_restart_show_first`, `sofian_restart_type_first`: after restart, the dump reads `["sofian terki", "password1", "password2", "password3"]` instead of `["sofian terki"]`
+  - `alpha_beta_restart_show_second`: after restart, the dump rereads `["alpha", "beta", "password1", "password2", "password3"]` and a `show` in position `2` displays `password1` instead of `beta`
+  - `dense_twelve_restart_show_last`: a dense list of `12` ASCII entries crashes `app-passwords` after restart with `Remote end closed connection without response`, then `The app crashed with signal 11`
+  - `second_len_plus1_restart_show_second`: the accepted corrupted raw survives the restart, but the dump rereads `["github", "gmail\\0", "password1", "password2", "password3"]` and a `show` in position `2` displays `password1`
+- `notes`: Speculos restart with persistent NVRAM reveals systematic pollution by `password1/password2/password3`, which then combines with the selection bugs already seen on the lists### [x] FZ-13 Prompts APDU + UI mixed
 
 - `status`: `done`
-- `scope`: injecter des appuis pendant des flows APDU
+- `scope`: inject supports during APDU flows
 - `focus`:
-  - validation/rejet rapide
-  - navigation inattendue pendant prompt
-  - sortie/reentrée pendant transfert
-- `entrypoint`: CLI async + API boutons Speculos
+  - quick validation/rejection
+  - unexpected navigation during prompt
+  - exit/reentry during transfer
+- `entrypoint`: async CLI + Speculos buttons API
 - `oracles`:
-  - blocage
-  - état incohérent
-  - crash
+  - blocking
+  - inconsistent state
+  - crashes
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-apdu-ui-interleaved.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-apdu-ui-interleaved.py`
 - `test status`:
-  - smoke validé sur `sofian_push_prompt_bounce_show` et `alpha_beta_push_prompt_spam_show_second`
-  - campagne complète validée sur `5` cas, avec `3` failures reproductibles
+  - smoke validated on `sofian_push_prompt_bounce_show` and `alpha_beta_push_prompt_spam_show_second`
+  - complete campaign validated on `5` cases, with `3` reproducible failures
 - `findings`:
-  - `sofian_verify_prompt_doubletap`: un `verify` après push normal timeoute en lecture si on injecte des appuis parasites autour de `Approve`; la CLI échoue avec `error: Read timed out` et l'écran reste bloqué sur `Transfer metadatas ?`
-  - `alpha_beta_push_prompt_spam_show_second`: un `push` valide de `["alpha", "beta"]` crashe `app-passwords` pendant le transfert quand on mélange APDU et boutons sur les prompts, avec `Remote end closed connection without response`, puis `The app crashed with signal 11`
-  - `dense_twelve_push_prompt_spam_show_last`: même crash `signal 11` sur une liste dense de `12` entrées si on spamme les prompts pendant le `push`
-  - `sofian_push_prompt_bounce_show` reste stable malgré les appuis parasites
-  - `leading_space_push_prompt_spam_type` reste aussi stable sur cette campagne
-- `notes`: le mélange APDU/UI ne casse pas tous les cas simples, mais il suffit à transformer des seeds déjà fragiles en crashs pendant le `push` et à bloquer un `verify` pourtant valide
+  - `sofian_verify_prompt_doubletap`: a `verify` after normal push timeout in reading if we inject parasitic supports around `Approve`; the CLI fails with `error: Read timed out` and the screen gets stuck on `Transfer metadatas ?`
+  - `alpha_beta_push_prompt_spam_show_second`: a valid `push` of `["alpha", "beta"]` crashes `app-passwords` during transfer when mixing APDU and buttons on prompts, with `Remote end closed connection without response`, then `The app crashed with signal 11`
+  - `dense_twelve_push_prompt_spam_show_last`: same crash `signal 11` on a dense list of `12` entries if you spam the prompts during `push`
+  - `sofian_push_prompt_bounce_show` remains stable despite parasitic supports
+  - `leading_space_push_prompt_spam_type` also remains stable in this campaign
+- `notes`: the APDU/UI mix does not break all simple cases, but it is enough to transform already fragile seeds into crashes during `push` and to block a `verify` that is nevertheless valid
 
-### [x] FZ-14 Corpus ciblé dangerous nicknames
+### [x] FZ-14 Corpus targeted dangerous nicknames
 
 - `status`: `done`
-- `scope`: petit corpus manuel à forte valeur
+- `scope`: small manual corpus with high value
 - `focus`:
   - `sofian terki`
-  - espaces début/fin
+  - start/end spaces
   - apostrophe, backtick, slash, backslash
   - accents
-  - 19 octets exacts
-  - collisions visuelles
-- `entrypoint`: push minimal puis `show/type/delete`
+  - 19 exact bytes
+  - visual collisions
+- `entrypoint`: minimal push then `show/type/delete`
 - `oracles`:
-  - crash
+  - crashes
   - corruption
-  - divergence de rendu
+  - rendering divergence
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-dangerous-nicknames.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-dangerous-nicknames.py`
 - `test status`:
-  - smoke validé sur `sofian_space` pour `show`, `type`, `delete`
-  - smoke validé sur `leading_space` pour `show` et `delete`
-  - cas instable observé sur `leading_space` + scénario `type`
+  - smoke validated on `sofian_space` for `show`, `type`, `delete`
+  - smoke validated on `leading_space` for `show` and `delete`
+  - unstable case observed on `leading_space` + scenario `type`
 - `findings`:
-  - `sofian terki` ne reproduit pas le reset sous Speculos 1.3.1
-  - `leading_space` (`" leading"`) a déclenché un timeout intermittent pendant `device push` avant le scénario `type`
-  - repro ciblée sur `leading_space/type` : `2` succès, `1` timeout `LOAD_METADATAS`
-- `notes`: meilleur point d'entrée pour l'incident actuel ; le cas `leading_space` doit être promu dans `FZ-15`
+  - `sofian terki` does not reproduce the reset under Speculos 1.3.1
+  - `leading_space` (`" leading"`) triggered an intermittent timeout during `device push` before scenario `type`
+  - repro targeted on `leading_space/type`: `2` success, `1` timeout `LOAD_METADATAS`
+- `notes`: best entry point for the current incident; the case `leading_space` must be promoted to `FZ-15`
 
-### [x] FZ-15 Régression orientée incident
+### [x] FZ-15 Incident Oriented Regression
 
 - `status`: `done`
-- `scope`: scénarios très proches des incidents observés
+- `scope`: scenarios very close to the incidents observed
 - `focus`:
   - `push nickname -> show password`
-  - `push -> verify séparé`
+  - `push -> separate verify`
   - `push -> restart -> show`
-  - variantes autour d'un même nickname
-- `entrypoint`: harness dédié incident
+  - variations around the same nickname
+- `entrypoint`: dedicated incident harness
 - `oracles`:
-  - crash
-  - écran inattendu
-  - état relu incohérent
+  - crashes
+  - unexpected screen
+  - inconsistent reread state
 - `implementation`:
-  - harness partagé : `scripts/speculos_fuzz_lib.py`
-  - fuzzer : `scripts/fuzz-incident-regression.py`
+  - shared harness: `scripts/speculos_fuzz_lib.py`
+  - fuzzer: `scripts/fuzz-incident-regression.py`
 - `test status`:
-  - smoke validé sur `sofian_push_verify_show_control` et `alpha_beta_push_show_second`
-  - campagne complète validée sur `8` cas, avec `5` failures reproductibles
+  - smoke validated on `sofian_push_verify_show_control` and `alpha_beta_push_show_second`
+  - complete campaign validated on `8` cases, with `5` reproducible failures
 - `findings`:
-  - `sofian_push_show_control` et `sofian_push_verify_show_control` passent ; le flux incident minimal sur un seul identifiant reste stable sous Speculos
-  - `sofian_push_restart_show_first` échoue après restart : l'état relu devient `["password1", "password2", "password3", "sofian terki"]`
-  - `leading_space_push_type_repeat3` passe `3/3` dans ce harness ; la flakiness observée plus tôt n'a pas été reproduite sur cette campagne
-  - `alpha_beta_push_show_second` crashe toujours `app-passwords` avec `Remote end closed connection without response`, puis `signal 11`
-  - `alpha_beta_push_verify_show_second` crashe aussi ; un `verify` séparé ne neutralise donc pas ce seed minimal
-  - `second_len_plus1_show_second` crashe aussi `app-passwords` avec `signal 11`
-  - `second_len_plus1_restart_show_second` ne crashe pas au restart, mais sélectionne `password1` au lieu de `gmail\\0`
+  - `sofian_push_show_control` and `sofian_push_verify_show_control` pass; the minimal incident flow on a single identifier remains stable under Speculos
+  - `sofian_push_restart_show_first` fails after restart: the reread state becomes `["password1", "password2", "password3", "sofian terki"]`
+  - `leading_space_push_type_repeat3` passes `3/3` in this harness; the flakiness observed earlier was not reproduced on this campaign
+  - `alpha_beta_push_show_second` always crashes `app-passwords` with `Remote end closed connection without response`, then `signal 11`
+  - `alpha_beta_push_verify_show_second` also crashes; a separate `verify` therefore does not neutralize this minimal seed
+  - `second_len_plus1_show_second` also crashes `app-passwords` with `signal 11`
+  - `second_len_plus1_restart_show_second` does not crash on restart, but selects `password1` instead of `gmail\\0`
 - `notes`:
-  - `FZ-15` confirme que le meilleur reproducer minimal actuel est `["alpha", "beta"] -> push -> show second`
-  - la séparation `push` / `verify` est saine pour `sofian terki`, mais ne suffit pas à protéger les seeds déjà fragiles
-
-### [x] FZ-16 Oracles multiples consolidés
+  - `FZ-15` confirms that the current best minimal reproducer is `["alpha", "beta"] -> push -> show second`
+  - the separation `push` / `verify` is healthy for `sofian terki`, but is not enough to protect the already fragile seeds### [x] FZ-16 Consolidated Multiple Oracles
 
 - `status`: `done`
-- `scope`: couche de détection commune à tous les fuzzers
+- `scope`: detection layer common to all fuzzers
 - `focus`:
   - crash process
   - timeout
   - APDU mismatch
-  - redémarrage app
-  - corruption relue
-  - écran inattendu
-- `entrypoint`: bibliothèque partagée du harness
-- `oracles`: n/a, ce fuzzer est l'oracle
+  - app restart
+  - corruption reread
+  - unexpected screen
+- `entrypoint`: shared harness library
+- `oracles`: n/a, this fuzzer is the oracle
 - `implementation`:
-  - bibliothèque partagée : `scripts/fuzz_oracles.py`
-  - validations dédiées : `scripts/fuzz-oracle-consolidation.py`
-  - intégration branchée au moins dans `scripts/fuzz-incident-regression.py` et `scripts/fuzz-low-level-apdu.py`
+  - shared library: `scripts/fuzz_oracles.py`
+  - dedicated validations: `scripts/fuzz-oracle-consolidation.py`
+  - plugged in integration at least in `scripts/fuzz-incident-regression.py` and `scripts/fuzz-low-level-apdu.py`
 - `test status`:
-  - validation complète exécutée via `./scripts/fuzz-oracle-consolidation.py --json-out /tmp/fz16-full.json`
-  - `4/4` checks verts
+  - full validation executed via `./scripts/fuzz-oracle-consolidation.py --json-out /tmp/fz16-full.json`
+  - `4/4` green checks
 - `findings`:
-  - le contrôle sain `sofian_push_verify_show_control` ne déclenche aucun oracle parasite
-  - le reproducer minimal `alpha_beta_push_show_second` déclenche bien `speculos_crash`, `transport_closed` et `empty_screen`
-  - le cas de pollution après restart `sofian_push_restart_show_first` déclenche bien `pulled_state_mismatch` et `password_pollution`
-  - le hang APDU `dump_partial_then_info_then_pull` déclenche bien `timeout` et `stuck_transfer_prompt` ; il remonte aussi `unexpected_screen`, ce qui est cohérent avec un écran bloqué sur `Transfer metadatas ?`
+  - the healthy control `sofian_push_verify_show_control` does not trigger any parasitic oracle
+  - the minimal reproducer `alpha_beta_push_show_second` triggers `speculos_crash`, `transport_closed` and `empty_screen`
+  - the case of pollution after restart `sofian_push_restart_show_first` triggers `pulled_state_mismatch` and `password_pollution`
+  - the hang APDU `dump_partial_then_info_then_pull` triggers `timeout` and `stuck_transfer_prompt`; it also returns `unexpected_screen`, which is consistent with a screen stuck on `Transfer metadatas ?`
 - `notes`:
-  - la couche commune sait maintenant classer les familles de panne principales déjà observées: crash Speculos, fermeture de transport, timeout, écran bloqué, pollution `password1/2/3`, mismatch de dump, sélection inattendue
-  - la phase d'implémentation des `16` fuzzers du tracker est terminée
+  - the common layer now knows how to classify the main fault families already observed: Speculos crash, transport closure, timeout, blocked screen, pollution `password1/2/3`, dump mismatch, unexpected selection
+  - the implementation phase of the `16` fuzzers of the tracker is completed

@@ -1,28 +1,28 @@
-# Builds et tests
+# Builds and Tests
 
-## Pré-requis
+## Prerequisites
 
 - JDK 17
-- Android SDK installé
+- Android SDK installed
 - `adb`
-- Docker ou `speculos` local pour les tests d'émulation
-- un AVD Android si tu veux les tests instrumentés sur émulateur
+- Docker or local `speculos` for emulation tests
+- an Android AVD if you want instrumented emulator tests
 
-Le wrapper Gradle du repo doit être utilisé :
+The repository Gradle wrapper must be used:
 
 ```bash
 ./gradlew
 ```
 
-## Baseline recommandée
+## Recommended Baseline
 
-La baseline à relancer après un changement significatif est :
+The baseline to rerun after a significant change is:
 
 ```bash
 ./gradlew :core:test :ledger-protocol:test :cli:test :android-app:testDebugUnitTest :android-app:assembleDebug :android-app:assembleDebugAndroidTest :android-app:lintDebug
 ```
 
-## Tests ciblés par module
+## Targeted Tests by Module
 
 ### `core`
 
@@ -42,7 +42,7 @@ La baseline à relancer après un changement significatif est :
 ./gradlew :cli:test :cli:installDist
 ```
 
-Smoke CLI local :
+Local CLI smoke test:
 
 ```bash
 ./cli/build/install/ledger-pw/bin/ledger-pw help
@@ -51,113 +51,113 @@ Smoke CLI local :
 
 ### `android-app`
 
-Unit tests Android :
+Android unit tests:
 
 ```bash
 ./gradlew :android-app:testDebugUnitTest
 ```
 
-Instrumentation build :
+Instrumentation build:
 
 ```bash
 ./gradlew :android-app:assembleDebug :android-app:assembleDebugAndroidTest
 ```
 
-Lint :
+Lint:
 
 ```bash
 ./gradlew :android-app:lintDebug
 ```
 
-## Test Android sur émulateur avec Speculos
+## Android Testing on an Emulator with Speculos
 
-### Build de l'app Ledger Passwords
+### Build the Ledger Passwords App
 
-Build de test par défaut :
+Default test build:
 
 ```bash
 scripts/build-passwords-app.sh
 ```
 
-Pour éviter l'état de démonstration injecté par `POPULATE=1` :
+To avoid the demo state injected by `POPULATE=1`:
 
 ```bash
 scripts/build-passwords-app.sh --no-populate
 ```
 
-### Lancer Speculos
+### Start Speculos
 
 ```bash
 scripts/run-speculos-passwords.sh build/speculos/app-passwords/bin/app.elf
 ```
 
-### Lancer le smoke CLI
+### Run the CLI Smoke Test
 
 ```bash
 scripts/speculos-smoke.sh --auto-approve --with-push
 ```
 
-### Lancer le test E2E Android
+### Run the Android E2E Test
 
 ```bash
 scripts/android-emulator-speculos-test.sh
 ```
 
-Ce script :
+This script:
 
-- détecte un `emulator-*` connecté ;
-- démarre l'auto-approbation Speculos ;
-- nettoie les données de l'app ;
-- lance `connectedDebugAndroidTest`.
+- detects a connected `emulator-*`;
+- starts Speculos auto-approval;
+- clears app data;
+- runs `connectedDebugAndroidTest`.
 
-## Test manuel sur émulateur
+## Manual Test on an Emulator
 
-Installer et lancer l'app :
+Install and launch the app:
 
 ```bash
 adb -s emulator-5554 install -r android-app/build/outputs/apk/debug/android-app-debug.apk
 adb -s emulator-5554 shell am start -n com.ledgerpasswords.companion/com.ledgerpasswords.companion.android.MainActivity
 ```
 
-Puis :
+Then:
 
-1. ouvrir `Synchroniser` ;
-2. choisir `Speculos` ;
-3. laisser `10.0.2.2` et `10100` si tu utilises la config par défaut ;
-4. tester `Importer`, `Comparer`, `Exporter`, `Vérifier`.
+1. open `Sync`;
+2. choose `Speculos`;
+3. keep `10.0.2.2` and `10100` if you use the default configuration;
+4. test `Import`, `Compare`, `Export`, `Verify`.
 
-## Test manuel sur vrai Ledger
+## Manual Test on a Real Ledger
 
-Le vrai hardware doit être traité comme un smoke test, pas comme un banc de stress.
+Real hardware should be treated as a smoke test, not as a stress bench.
 
-Ordre recommandé :
+Recommended order:
 
-1. `Comparer`
-2. `Importer depuis Ledger`
-3. `Vérifier`
-4. puis seulement `Exporter vers Ledger` si le diff est compris
+1. `Compare`
+2. `Import from Ledger`
+3. `Verify`
+4. only then `Export to Ledger` if the diff is understood
 
-Rappels :
+Reminders:
 
-- l'app `Passwords` doit être ouverte sur le Ledger ;
-- le `push` réel demande confirmation ;
-- le companion ne fait pas de readback automatique après écriture ;
-- le mode `Debug` contient l'override dangereux et ne doit pas être confondu avec le flow normal.
+- the `Passwords` app must be open on the Ledger;
+- real `push` requires confirmation;
+- the companion does not perform automatic readback after writing;
+- `Debug` contains the dangerous override and must not be confused with the normal flow.
 
-## Où regarder quand ça casse
+## Where to Look When It Breaks
 
-### Logs Android persistants
+### Persistent Android Logs
 
 ```bash
 adb shell run-as com.ledgerpasswords.companion cat files/ledger-debug.log
 ```
 
-### Logcat Android ciblé
+### Targeted Android Logcat
 
 ```bash
 adb logcat -d LedgerPwUsb:V LedgerPwUi:V *:S
 ```
 
-### JSON de sortie des fuzzers
+### JSON Output from Fuzzers
 
-La plupart des scripts écrivent un fichier `--json-out` exploitable pour relire les cas et les oracles.
+Most scripts write a usable `--json-out` file for reviewing cases and oracles.

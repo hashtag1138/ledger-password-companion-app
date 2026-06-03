@@ -1,21 +1,21 @@
-# Choix techniques
+# Technical choices
 
-## Langage
+## Language
 
-Kotlin est utilisé partout pour partager le maximum de logique entre la CLI et Android.
+Kotlin is used everywhere to share as much logic as possible between the CLI and Android.
 
-Décision V1 : modules Kotlin/JVM simples pour `core`, `ledger-protocol` et `cli`, plus module Android classique pour `android-app`.
+Decision V1: simple Kotlin/JVM modules for `core`, `ledger-protocol` and `cli`, plus classic Android module for `android-app`.
 
-Alternative future : migrer `core` et `ledger-protocol` en Kotlin Multiplatform si une cible iOS, Desktop native ou shared Android/JVM plus stricte devient nécessaire.
+Future alternative: migrate `core` and `ledger-protocol` to Kotlin Multiplatform if a stricter iOS, Desktop native or shared Android/JVM target becomes necessary.
 
 ## Build
 
 - Gradle Kotlin DSL.
-- Version catalog `gradle/libs.versions.toml`.
+- Catalog version `gradle/libs.versions.toml`.
 - JDK 17.
-- Versions de Kotlin, Android Gradle Plugin, Compose et coroutines centralisées dans `gradle/libs.versions.toml`.
+- Versions of Kotlin, Android Gradle Plugin, Compose and coroutines centralized in `gradle/libs.versions.toml`.
 
-Le wrapper Gradle est inclus et doit être utilisé pour tous les builds du repo :
+The Gradle wrapper is included and should be used for all builds in the repo:
 
 ```bash
 ./gradlew
@@ -25,103 +25,103 @@ Le wrapper Gradle est inclus et doit être utilisé pour tous les builds du repo
 
 ### `core`
 
-Responsabilité : logique métier pure.
+Responsibility: pure business logic.
 
-Ne doit dépendre de rien d'autre que Kotlin stdlib et test libs.
+Should not depend on anything other than Kotlin stdlib and test libs.
 
-Contient :
+Contains:
 
-- modèles ;
-- validation ;
-- édition ;
-- diff ;
-- constantes fonctionnelles.
+- models;
+- validation;
+- editing;
+- diff;
+- functional constants.
 
-Interdit dans ce module :
+Prohibited in this module:
 
-- Android ;
-- USB ;
-- APDU ;
-- fichiers ;
-- JSON ;
-- coroutines si non nécessaire.
+- Android;
+- USB;
+- APDU;
+- files;
+- JSON;
+- coroutines if not necessary.
 
 ### `ledger-protocol`
 
-Responsabilité : parler le format Ledger Passwords.
+Responsibility: Speak Ledger Passwords format.
 
-Contient :
+Contains:
 
-- codec metadata brut ;
-- backup JSON ;
-- constantes APDU ;
-- client Ledger Passwords ;
-- transport abstrait ;
-- fake transport ;
-- framing USB/HID partagé.
+- raw metadata codec;
+- JSON backup;
+- APDU constants;
+- Ledger Passwords client;
+- abstract transport;
+- fake transport;
+- shared USB/HID framing.
 
-Ne contient pas :
+Does not contain:
 
-- UI ;
-- permissions Android ;
-- logique CLI ;
-- stockage local Android.
+- UI;
+- Android permissions;
+- CLI logic;
+- Android local storage.
 
 ### `cli`
 
-Responsabilité : fournir un banc de test utilisable sur PC.
+Responsibility: provide a test bench usable on PC.
 
-Contient :
+Contains:
 
-- parsing d'arguments minimal ;
-- commandes offline ;
-- plus tard, commandes device ;
-- affichage humain.
+- minimal argument parsing;
+- offline commands;
+- later, device commands;
+- human display.
 
-Choix V1 : pas de dépendance externe de CLI parser pour limiter le squelette. On pourra remplacer par Clikt si le CLI devient complexe.
+Choice V1: no external CLI parser dependency to limit the skeleton. We can replace it with Clikt if the CLI becomes complex.
 
 ### `android-app`
 
-Responsabilité : UI et intégration Android.
+Responsibility: UI and Android integration.
 
-Contient :
+Contains:
 
-- Jetpack Compose ;
-- USB permission/host ;
-- Storage Access Framework ;
-- état UI ;
-- ViewModels à ajouter ;
-- intégration du client Ledger via `AndroidUsbLedgerTransport`.
+- Jetpack Compose;
+- USB permission/host;
+- Storage Access Framework;
+- UI state;
+- ViewModels to add;
+- Ledger client integration via `AndroidUsbLedgerTransport`.
 
-## Format metadata
+## Metadata format
 
-Le format brut respecte le comportement Ledger Passwords :
+The raw format respects the Ledger Passwords behavior:
 
 ```text
 [length][kind][charsets][nickname bytes]
 ```
 
 - `length = 1 + nicknameByteLength` ;
-- `kind = 0x00` actif ;
-- `kind = 0xFF` effacé ;
+- `kind = 0x00` active;
+- `kind = 0xFF` deleted;
 - `charsets = bitmask 8 bits` ;
-- padding zéro jusqu'à `storageSize` ;
-- premier `length = 0x00` marque la fin.
+- zero padding up to `storageSize`;
+- first `length = 0x00` marks the end.
 
-## Limites
+## Limits
 
-- `storageSize = 4096` par défaut ;
-- `MAX_METANAME = 20` côté Ledger ;
-- nickname utile = `19` octets UTF-8 ;
-- limite prudente = `178` entrées.
+- `storageSize = 4096` by default;
+- `MAX_METANAME = 20` Ledger side;
+- useful nickname = `19` UTF-8 bytes;
+- conservative limit = `178` entries.
 
-Le code valide en **octets UTF-8**, pas en nombre de caractères. Par défaut, l'UI devrait recommander ASCII pour éviter les surprises de saisie sur Ledger.
+The code validates in **UTF-8 bytes**, not in number of characters. By default, the UI should recommend ASCII to avoid input surprises on Ledger.
 
 ## Charsets
 
-Mapping :
+Mapping:
 
-| Nom | Bit |
+| Name | Bit |
 |---|---:|
 | `UPPERCASE` | `0x01` |
 | `LOWERCASE` | `0x02` |
@@ -133,11 +133,11 @@ Mapping :
 | `BRACKETS` | `0x80` |
 | `ALL_SETS` | `0xFF` |
 
-`0x00` est lu comme `ALL_SETS` pour compatibilité.
+`0x00` is read as `ALL_SETS` for compatibility.
 
-## Protocole Ledger
+## Ledger Protocol
 
-APDU supportées :
+Supported APDUs:
 
 | Action | CLA | INS |
 |---|---:|---:|
@@ -146,11 +146,11 @@ APDU supportées :
 | dump metadata | `0xE0` | `0x04` |
 | load metadata | `0xE0` | `0x05` |
 
-Le device demande une approbation physique pour dump et load. L'app Android/CLI doit donc afficher un état explicite : “valide l'action sur le Ledger”.
+The device requests physical approval for dump and load. The Android/CLI app must therefore display an explicit status such as "approve the action on the Ledger".
 
-## Transport USB
+## USB transport
 
-Le transport reste derrière l'interface :
+The transport remains behind the interface:
 
 ```kotlin
 interface LedgerTransport {
@@ -164,55 +164,55 @@ interface LedgerTransport {
 }
 ```
 
-Avantage :
+Advantage:
 
-- tests avec fake ;
-- CLI PC ;
-- Speculos ;
-- Android USB ;
-- futures variantes sans changer le protocole métier.
+- tests with fake;
+- PC CLI;
+- Speculos;
+- Android USB;
+- future variants without changing the business protocol.
 
 ## Android
 
-Choix V1 : USB uniquement.
+Choice V1: USB only.
 
-Raisons :
+Reasons:
 
-- plus simple que BLE ;
-- plus robuste pour commencer ;
-- validation physique Ledger déjà obligatoire ;
-- permet tests rapides en OTG.
+- simpler than BLE;
+- more robust to begin with;
+- Ledger physical validation already mandatory;
+- allows rapid OTG testing.
 
-Le manifest déclare `android.hardware.usb.host` et un filtre de vendor-id Ledger `0x2C97`.
+The manifest declares `android.hardware.usb.host` and a Ledger vendor-id filter `0x2C97`.
 
-## Sécurité
+## Security
 
-Posture :
+Posture:
 
-- ne jamais demander la recovery phrase ;
-- ne jamais stocker de mots de passe finaux ;
-- ne jamais afficher de mots de passe finaux ;
-- les nicknames sont considérés comme privés mais non secrets au niveau recovery phrase ;
-- pas de réseau par défaut ;
-- pas de telemetry ;
-- backup local automatique avant push.
+- never ask for the recovery phrase;
+- never store final passwords;
+- never display final passwords;
+- nicknames are considered private but not secret at recovery phrase level;
+- no default network;
+- no telemetry;
+- automatic local backup before push.
 
-## Stratégie d'implémentation Codex
+## Codex implementation strategy
 
-Socle déjà réalisé :
+Base already made:
 
 1. compilation `core` / `ledger-protocol` / `cli` / `android-app` ;
-2. tests offline codec, client, fake transport et CLI ;
-3. stabilisation `BackupJsonCodec` ;
-4. commandes CLI offline et device ;
-5. transports Speculos, PC HID et Android USB ;
-6. premier flow Android de sync USB ;
-7. stockage local Android persistant et édition locale ;
+2. offline codec, client, fake transport and CLI tests;
+3. stabilization `BackupJsonCodec`;
+4. offline and device CLI commands;
+5. Speculos, PC HID and Android USB transports;
+6. Android's first USB sync flow;
+7. Persistent Android local storage and local editing;
 8. import/export `backup.json` Android via Storage Access Framework.
 
-Prochain ordre conseillé :
+Next recommended order:
 
-1. rejouer le chemin d'écriture sous Speculos avant toute nouvelle tentative de `push` Android sur vrai device ;
-2. valider sur vrai Ledger Android en lecture seule et ajuster la robustesse USB terrain ;
-3. ajouter un vrai merge/conflit avant remplacement local après `pull` ;
-4. ajouter un écran de confirmation/diff avant `push`.
+1. replay the writing path under Speculos before any new attempt at `push` Android on a real device;
+2. validate on real Ledger Android read-only and adjust the USB field robustness;
+3. add a real merge/conflict before local replacement after `pull`;
+4. add confirmation/diff screen before `push`.

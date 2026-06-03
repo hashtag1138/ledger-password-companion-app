@@ -1,166 +1,166 @@
-# Tests via Speculos
+# Testing with Speculos
 
-Speculos est le bon environnement pour rejouer le chemin APDU de l'app Passwords sans toucher un vrai Ledger.
+Speculos is the right environment to replay the APDU path of the Passwords app without touching a real Ledger.
 
-Ce repo a déjà un transport TCP dédié côté protocole et la CLI parle déjà Speculos par défaut. Ce document ajoute le mode d'emploi manquant autour de l'émulateur.
+This repository already has a dedicated TCP transport on the protocol side, and the CLI already speaks to Speculos by default. This document fills the missing operational guide around the emulator.
 
-## Ce que Speculos couvre ici
+## What Speculos Covers Here
 
-- le `getAppInfo` et `getAppConfig` ;
-- la lecture `dumpMetadatas` ;
-- l'écriture `loadMetadatas` ;
-- les prompts de confirmation de l'app Passwords ;
-- les vérifications CLI `pull`, `push`, `verify`, `diff`.
+- `getAppInfo` and `getAppConfig`;
+- `dumpMetadatas` reads;
+- `loadMetadatas` writes;
+- confirmation prompts from the Passwords app;
+- CLI `pull`, `push`, `verify`, and `diff` checks.
 
-## Ce que Speculos ne remplace pas
+## What Speculos Does Not Replace
 
-- le stack USB Android ;
-- la sélection d'interface HID ou bulk sur device réel ;
-- les timings hardware réels ;
-- certains comportements firmware comme les watchdogs.
+- the Android USB stack;
+- HID or bulk interface selection on a real device;
+- real hardware timing;
+- some firmware behaviors such as watchdogs.
 
-Après l'incident observé pendant `push` Android sur vrai device, le chemin d'écriture doit d'abord être rejoué sous Speculos. Le vrai Ledger doit rester réservé au smoke test matériel en lecture seule tant que l'incident n'est pas compris.
+After the incident observed during Android `push` on a real device, the write path must first be replayed under Speculos. The real Ledger should remain reserved for read-only hardware smoke tests until the incident is understood.
 
-## Pré-requis
+## Prerequisites
 
-Il faut disposer du binaire `app.elf` de l'app Ledger Passwords. Ce repo ne l'embarque pas.
+You need the `app.elf` binary of the Ledger Passwords app. This repository does not ship it.
 
-Tu peux ensuite :
+You can then:
 
-- soit installer Speculos localement ;
-- soit utiliser l'image Docker officielle `ghcr.io/ledgerhq/speculos`.
+- either install Speculos locally;
+- or use the official Docker image `ghcr.io/ledgerhq/speculos`.
 
-## Builder l'`app.elf`
+## Build `app.elf`
 
-Le repo inclut maintenant un helper qui clone `LedgerHQ/app-passwords` et le build dans l'image Docker officielle Ledger :
+The repository now includes a helper that clones `LedgerHQ/app-passwords` and builds it inside the official Ledger Docker image:
 
 ```bash
 scripts/build-passwords-app.sh
 ```
 
-Le binaire généré est un build de test avec `TESTING=1 POPULATE=1`. Par défaut il sort en :
+The generated binary is a test build with `TESTING=1 POPULATE=1`. By default it is written to:
 
 ```text
 build/speculos/app-passwords/bin/app.elf
 ```
 
-Tu peux récupérer juste le chemin :
+You can retrieve only the path:
 
 ```bash
 scripts/build-passwords-app.sh --print-path
 ```
 
-## Lancer l'émulateur
+## Start the Emulator
 
-Le wrapper du repo choisit automatiquement le binaire local `speculos` si présent, sinon Docker.
-
-```bash
-scripts/run-speculos-passwords.sh /chemin/vers/app.elf
-```
-
-Par défaut :
-
-- modèle : `nanosp`
-- affichage : `headless`
-- API/Web UI : `http://127.0.0.1:5000`
-- APDU TCP : `127.0.0.1:9999`
-- nom/version exposés : `Passwords:0.0.0`
-
-Exemples :
+The repository wrapper automatically chooses the local `speculos` binary if present, otherwise Docker.
 
 ```bash
-scripts/run-speculos-passwords.sh /chemin/vers/app.elf --display text
-scripts/run-speculos-passwords.sh /chemin/vers/app.elf --docker --sdk 1.0.3
-scripts/run-speculos-passwords.sh /chemin/vers/app.elf --display headless --vnc-port 41000
+scripts/run-speculos-passwords.sh /path/to/app.elf
 ```
 
-Si l'app demande une confirmation, utilise :
+By default:
 
-- la Web UI sur `http://127.0.0.1:5000` ;
-- ou le mode `--display text` ;
-- ou des règles d'automation Speculos passées après `--`.
+- model: `nanosp`
+- display: `headless`
+- API/Web UI: `http://127.0.0.1:5000`
+- APDU TCP: `127.0.0.1:9999`
+- exposed name/version: `Passwords:0.0.0`
 
-Exemple de passthrough :
+Examples:
 
 ```bash
-scripts/run-speculos-passwords.sh /chemin/vers/app.elf -- --automation file:rules.json
+scripts/run-speculos-passwords.sh /path/to/app.elf --display text
+scripts/run-speculos-passwords.sh /path/to/app.elf --docker --sdk 1.0.3
+scripts/run-speculos-passwords.sh /path/to/app.elf --display headless --vnc-port 41000
 ```
 
-## Smoke test CLI
+If the app asks for confirmation, use:
 
-Avec Speculos déjà lancé :
+- the Web UI at `http://127.0.0.1:5000`;
+- or `--display text`;
+- or Speculos automation rules passed after `--`.
+
+Passthrough example:
+
+```bash
+scripts/run-speculos-passwords.sh /path/to/app.elf -- --automation file:rules.json
+```
+
+## CLI Smoke Test
+
+With Speculos already running:
 
 ```bash
 scripts/speculos-smoke.sh
 ```
 
-Ce script :
+This script:
 
-- build la CLI si nécessaire ;
-- attend que le port TCP de Speculos soit ouvert ;
-- lance `device info` ;
-- fait un `device pull` dans un dossier temporaire ;
-- vérifie immédiatement le contenu relu avec `device verify`.
+- builds the CLI if needed;
+- waits for the Speculos TCP port to open;
+- runs `device info`;
+- performs a `device pull` into a temporary directory;
+- immediately verifies the reread content with `device verify`.
 
-Si tu viens juste de lancer un build de test `app-passwords` dans Speculos, tu peux aussi :
+If you just launched a test build of `app-passwords` in Speculos, you can also run:
 
 ```bash
 scripts/speculos-smoke.sh --api-port 5000 --first-run --auto-approve
 ```
 
-Ça fait deux choses utiles pour `app-passwords` :
+This does two useful things for `app-passwords`:
 
-- valide le disclaimer de premier lancement ;
-- choisit `QWERTY` ;
-- lit l'écran Speculos et appuie sur `both` quand `Transfer metadatas ?` ou `Overwrite metadatas ?` apparaît.
+- approves the first-run disclaimer;
+- chooses `QWERTY`;
+- reads the Speculos screen and presses `both` when `Transfer metadatas ?` or `Overwrite metadatas ?` appears.
 
-Pour rejouer aussi le chemin d'écriture sur l'émulateur :
+To also replay the write path on the emulator:
 
 ```bash
 scripts/speculos-smoke.sh --api-port 5000 --auto-approve --with-push
 ```
 
-Le `--with-push` reste confiné à Speculos. Il n'utilise jamais `--hid`.
+`--with-push` stays confined to Speculos. It never uses `--hid`.
 
-## Test Android sur émulateur
+## Android Test on an Emulator
 
-L'app Android sait aussi parler à Speculos en TCP. Sur un AVD Android standard, le host local du PC est exposé en `10.0.2.2`.
+The Android app can also speak to Speculos over TCP. On a standard Android AVD, the host PC loopback is exposed as `10.0.2.2`.
 
-Le chemin automatisé recommandé est :
+The recommended automated path is:
 
 ```bash
 scripts/android-emulator-speculos-test.sh --first-run
 ```
 
-Ce script :
+This script:
 
-- détecte le premier `emulator-*` connecté ;
-- démarre un auto-approver Speculos côté host ;
-- vide les données de l'app sur l'émulateur ;
-- lance `:android-app:connectedDebugAndroidTest` contre `10.0.2.2:${SPECULOS_APDU_PORT:-10100}`.
+- detects the first connected `emulator-*`;
+- starts a Speculos auto-approver on the host side;
+- clears app data on the emulator;
+- runs `:android-app:connectedDebugAndroidTest` against `10.0.2.2:${SPECULOS_APDU_PORT:-10100}`.
 
-Par défaut, l'auto-approver ne regarde que l'écran courant Speculos et gère la séquence :
+By default, the auto-approver only watches the current Speculos screen and handles the sequence:
 
-- `Transfer metadatas ?` ou `Overwrite metadatas ?` : appui sur `right` ;
-- `Approve` : appui sur `both`.
+- `Transfer metadatas ?` or `Overwrite metadatas ?`: press `right`;
+- `Approve`: press `both`.
 
-Si tu veux garder les données locales de l'app entre deux runs :
+If you want to keep local app data between two runs:
 
 ```bash
 scripts/android-emulator-speculos-test.sh --keep-app-data
 ```
 
-Pour un test manuel sur l'émulateur :
+For a manual test on the emulator:
 
-1. installe l'APK ;
-2. ouvre l'écran de sync ;
-3. choisis `Speculos` ;
-4. laisse `10.0.2.2` et `10100` ;
-5. utilise `Rafraîchir`, puis `Importer`, `Comparer`, `Exporter`, `Vérifier`.
+1. install the APK;
+2. open the sync screen;
+3. choose `Speculos`;
+4. keep `10.0.2.2` and `10100`;
+5. use `Refresh`, then `Import`, `Compare`, `Export`, `Verify`.
 
-## Commandes CLI directes
+## Direct CLI Commands
 
-La CLI utilise Speculos TCP par défaut, donc ces commandes ciblent déjà l'émulateur :
+The CLI uses Speculos TCP by default, so these commands already target the emulator:
 
 ```bash
 ./cli/build/install/ledger-pw/bin/ledger-pw device info
@@ -170,17 +170,17 @@ La CLI utilise Speculos TCP par défaut, donc ces commandes ciblent déjà l'ém
 ./cli/build/install/ledger-pw/bin/ledger-pw device diff test-fixtures/backup-example.json
 ```
 
-Tu peux aussi changer l'hôte ou le port :
+You can also change host or port:
 
 ```bash
 ./cli/build/install/ledger-pw/bin/ledger-pw device info --server 127.0.0.1 --port 9999
 ```
 
-## Diagnostic recommandé après l'incident Android
+## Recommended Diagnostic Order After the Android Incident
 
-Le bon ordre de reprise est :
+The right recovery order is:
 
-1. rejouer `pull` puis `verify` sous Speculos ;
-2. rejouer `push` puis `verify` sous Speculos ;
-3. comparer les prompts vus dans Speculos avec ceux du vrai device ;
-4. seulement ensuite reprendre les tests hardware, en lecture seule d'abord.
+1. replay `pull` then `verify` under Speculos;
+2. replay `push` then `verify` under Speculos;
+3. compare the prompts seen in Speculos with those seen on the real device;
+4. only then resume hardware tests, read-only first.

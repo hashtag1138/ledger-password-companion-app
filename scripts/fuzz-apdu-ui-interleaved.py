@@ -58,7 +58,7 @@ class InterleavedCase:
 CASES: tuple[InterleavedCase, ...] = (
     InterleavedCase(
         case_id="sofian_push_prompt_bounce_show",
-        note="Push d'un item simple avec navigation parasite sur les prompts, puis show",
+        note="Push a simple item with stray prompt navigation, then show",
         random_seed=131,
         entries=(SeedEntry("sofian terki"),),
         setup_kind="empty",
@@ -75,7 +75,7 @@ CASES: tuple[InterleavedCase, ...] = (
     ),
     InterleavedCase(
         case_id="leading_space_push_prompt_spam_type",
-        note="Push d'un nickname à espace initial avec prompts spammés, puis type",
+        note="Push a nickname with leading space with spammed prompts, then type",
         random_seed=132,
         entries=(SeedEntry(" leading"),),
         setup_kind="empty",
@@ -90,7 +90,7 @@ CASES: tuple[InterleavedCase, ...] = (
     ),
     InterleavedCase(
         case_id="sofian_verify_prompt_doubletap",
-        note="Verify avec appuis parasites sur Approve après un push normal",
+        note="Verify with parasitic presses on Approve after a normal push",
         random_seed=133,
         entries=(SeedEntry("sofian terki"),),
         setup_kind="pushed",
@@ -104,7 +104,7 @@ CASES: tuple[InterleavedCase, ...] = (
     ),
     InterleavedCase(
         case_id="alpha_beta_push_prompt_spam_show_second",
-        note="Push alpha/beta avec prompts spammés, puis show du second item",
+        note="Push alpha/beta with spammed prompts, then show the second item",
         random_seed=134,
         entries=(SeedEntry("alpha"), SeedEntry("beta")),
         setup_kind="empty",
@@ -121,7 +121,7 @@ CASES: tuple[InterleavedCase, ...] = (
     ),
     InterleavedCase(
         case_id="dense_twelve_push_prompt_spam_show_last",
-        note="Push d'une liste dense avec prompts spammés, puis show du dernier item",
+        note="Push a dense list with spammed prompts, then show the last item",
         random_seed=135,
         entries=tuple(SeedEntry(f"slot-{index:02d}") for index in range(1, 13)),
         setup_kind="empty",

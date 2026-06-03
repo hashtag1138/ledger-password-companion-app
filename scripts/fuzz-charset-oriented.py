@@ -66,9 +66,9 @@ class RawUiCase:
 DIRECT_BATCHES: tuple[DirectBatchCase, ...] = (
     DirectBatchCase(
         case_id="official_vectors_gmail_and_alias",
-        note="Vecteurs officiels app-passwords pour gmail, avec alias 0x00 -> ALL_SETS",
+        note="Official app-passwords vectors for gmail, with alias 0x00 -> ALL_SETS",
         vectors=(
-            DirectVector(0x00, "gmail", "*m8ZlP1|}O vzvJrQNT4", "0x00 doit être normalisé en ALL_SETS"),
+            DirectVector(0x00, "gmail", "*m8ZlP1|}O vzvJrQNT4", "0x00 must be normalized to ALL_SETS"),
             DirectVector(0x01, "gmail", "HMYDQUIOVKPCKJIHQJEN"),
             DirectVector(0x03, "gmail", "KqIJcPjhENivHvOdmuKQ"),
             DirectVector(0x07, "gmail", "xNX8IQO4vP0ucO41J6JW"),
@@ -89,7 +89,7 @@ DIRECT_BATCHES: tuple[DirectBatchCase, ...] = (
     ),
     DirectBatchCase(
         case_id="single_bit_masks_and_rare_combo",
-        note="Bits isolés et combo rare UPPERCASE+BRACKETS",
+        note="Isolated bits and rare UPPERCASE+BRACKETS combo",
         vectors=(
             DirectVector(0x01, "gmail"),
             DirectVector(0x02, "gmail"),
@@ -108,7 +108,7 @@ DIRECT_BATCHES: tuple[DirectBatchCase, ...] = (
 RAW_UI_CASES: tuple[RawUiCase, ...] = (
     RawUiCase(
         case_id="raw_mask00_alias_allsets",
-        note="Metadata raw avec charset 0x00, alias ALL_SETS côté génération",
+        note="Raw metadata with charset 0x00, ALL_SETS alias on the generation side",
         mask=0x00,
         nickname="gmail",
         expected_direct="*m8ZlP1|}O vzvJrQNT4",

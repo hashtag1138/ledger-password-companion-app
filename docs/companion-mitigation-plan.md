@@ -1,207 +1,203 @@
-# Plan de Mitigation Côté Companion
+# Companion Side Mitigation Plan
 
-Ce document décrit ce que le companion peut faire pour réduire le risque d'écriture vers `app-passwords`, sans prétendre corriger les bugs internes de l'application Ledger.
+This document describes what the companion can do to reduce the risk of writing to `app-passwords`, without claiming to fix internal bugs in the Ledger application.
 
-Références :
+References:
 
 - [fuzzing-findings-report.md](/home/sofian/Sources/ledger-passwords-companion/docs/fuzzing-findings-report.md:1)
 - [fuzzing-tracker.md](/home/sofian/Sources/ledger-passwords-companion/docs/fuzzing-tracker.md:1)
 
-## Objectifs
+## Objectives
 
-1. empêcher le companion de pousser des états manifestement dangereux ;
-2. rendre les risques visibles à l'utilisateur avant un `push` réel ;
-3. garder un mode normal utilisable pour les cas simples et valides ;
-4. conserver un mode debug pour Speculos et l'investigation ;
-5. transformer les reproducers trouvés en suite de régression automatique.
+1. prevent the companion from pushing into manifestly dangerous states;
+2. make the risks visible to the user before a real `push`;
+3. keep a normal mode usable for simple and valid cases;
+4. maintain a debug mode for Speculos and investigation;
+5. transform the reproducers found into an automatic regression suite.
 
-## Non-objectifs
+## Non-objectives
 
-- corriger le firmware ou `app-passwords` lui-même ;
-- garantir qu'un `push` réel est "sans risque" tant que l'app Ledger contient des bugs connus ;
-- bloquer arbitrairement les espaces, qui sont supportés par `app-passwords`.
+- correct the firmware or `app-passwords` itself;
+- guarantee that a real `push` is “risk-free” as long as the Ledger app contains known bugs;
+- arbitrarily block spaces, which are supported by `app-passwords`.
 
-## Principe directeur
+## Guiding principle
 
-Le companion doit avoir deux niveaux de sévérité :
+The companion must have two levels of severity:
 
-1. validation de base, toujours active, pour garantir un état encodable et cohérent ;
-2. politique `hardware-safe`, appliquée avant `push` réel sur Ledger, plus stricte que le protocole brut.
+1. basic validation, always active, to guarantee an encodable and consistent state;
+2. policy `hardware-safe`, applied before real `push` on Ledger, stricter than the raw protocol.
 
-## Phase 0 : garde-fous immédiats
+## Phase 0: immediate safeguards
 
-### P0.1 Validation de base plus stricte
+### P0.1 Stricter baseline validation
 
-But :
+Purpose:
 
-- ne jamais pousser un état déjà douteux même s'il est encodable.
+- never push an already doubtful state even if it is encodable.
 
-À ajouter dans [VaultValidator.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/validation/VaultValidator.kt:1) :
+To add in [VaultValidator.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/validation/VaultValidator.kt:1):
 
-- rejet des caractères de contrôle Unicode ;
-- rejet des `NUL`, `TAB`, `LF`, `CR` ;
-- rejet des caractères invisibles dangereux :
-  - zero-width space/joiners ;
-  - bidi override/isolate controls ;
-- distinction entre `blank`, `leading/trailing whitespace`, `dangerous unicode`, `duplicate`.
+- rejection of Unicode control characters;
+- rejection of `NUL`, `TAB`, `LF`, `CR`;
+- rejection of dangerous invisible characters:
+  - zero-width space/joiners;
+  - bidi override/isolate controls;
+- distinction between `blank`, `leading/trailing whitespace`, `dangerous unicode`, `duplicate`.
 
-Impact UX :
+UX impact:
 
-- les espaces internes restent permis ;
-- les espaces de début/fin deviennent au minimum un warning fort, idéalement un rejet en mode hardware-safe.
+- internal spaces remain permitted;
+- start/end spaces become at least a strong warning, ideally a rejection in hardware-safe mode.
 
-### P0.2 Geler le push réel si le backup brut est suspect
+### P0.2 Freeze the real push if the raw backup is suspicious
 
-But :
+Purpose:
 
-- ne pas réémettre vers un vrai Ledger un `raw_metadatas` douteux ou incohérent.
+- do not retransmit a doubtful or inconsistent `raw_metadatas` to a real Ledger.
 
-Règles :
+Rules:
 
-- si un import JSON contient des `corruptions_encountered`, bloquer `push` réel ;
-- si `raw_metadatas` existe mais ne correspond pas au vault décodé attendu, bloquer `push` réel ;
-- si un round-trip local `decode -> encode -> decode` diverge, bloquer `push` réel ;
-- si le backup vient d'un cas fuzz connu dangereux, bloquer `push` réel.
+- if a JSON import contains `corruptions_encountered`, block real `push`;
+- if `raw_metadatas` exists but does not correspond to the expected decoded vault, block the real `push`;
+- if a local round-trip `decode -> encode -> decode` diverges, block `push` real;
+- if the backup comes from a known dangerous fuzz case, block `push` real.
 
-Modules cibles :
+Target modules:
 
 - [BackupJsonCodec.kt](/home/sofian/Sources/ledger-passwords-companion/ledger-protocol/src/main/kotlin/com/ledgerpasswords/companion/ledger/backup/BackupJsonCodec.kt:16)
 - [MainActivity.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/MainActivity.kt:742)
-- [Main.kt](/home/sofian/Sources/ledger-passwords-companion/cli/src/main/kotlin/com/ledgerpasswords/companion/cli/Main.kt:1)
+- [Main.kt](/home/sofian/Sources/ledger-passwords-companion/cli/src/main/kotlin/com/ledgerpasswords/companion/cli/Main.kt:1)### P0.3 Keep `push` and `verify` separate
 
-### P0.3 Garder `push` et `verify` séparés
+Status:
 
-Statut :
+- already in place on the Android side.
 
-- déjà en place côté Android.
+Rule:
 
-Règle :
+- never reintroduce automatic post-write readback on real Ledger;
+- keep `verify` as an explicit and separate action.
 
-- ne jamais réintroduire de readback automatique post-write sur vrai Ledger ;
-- garder `verify` comme action explicite et séparée.
+## Phase 1: policy `hardware-safe`
 
-## Phase 1 : politique `hardware-safe`
+### P1.1 Add an explicit risk policy
 
-### P1.1 Ajouter une politique de risque explicite
-
-Créer une couche dédiée, par exemple :
+Create a dedicated layer, for example:
 
 - `core/.../risk/LedgerPushRiskPolicy.kt`
 
-Elle classera un vault en :
+It will classify a vault into:
 
 - `allow`
 - `warn`
 - `block`
 
-Heuristiques minimales à intégrer :
+Minimum heuristics to integrate:
 
-- caractères invisibles ou bidi : `block`
-- leading/trailing spaces : `warn` ou `block`
-- noms normalisés identiques sous `NFC + trim + lowercase` : `block`
-- corpus confusables visuellement : `warn`
-- corpus très proches par préfixe long : `warn`
-- nombre d'entrées dense proche des limites UI : `warn`
-- raw importé avec anomalie précédente : `block`
+- invisible or bidi characters: `block`
+- leading/trailing spaces: `warn` or `block`
+- identical standardized names under `NFC + trim + lowercase`: `block`
+- visually confusing corpora: `warn`
+- very similar corpora by long prefix: `warn`
+- dense number of entries close to UI limits: `warn`
+- imported raw with previous anomaly: `block`
 
-### P1.2 Appliquer la politique seulement au push hardware
+### P1.2 Apply policy only to hardware push
 
-Principe :
+Principle:
 
-- ne pas casser inutilement les flux locaux ou Speculos ;
-- être plus strict uniquement avant `push` réel.
+- do not unnecessarily break local or Speculos flows;
+- be stricter only before `push` actual.
 
-Règles :
+Rules:
 
-- mode local Android : validation de base seulement ;
-- `push` vers Speculos : autoriser avec warnings ;
-- `push` vers vrai Ledger USB/HID : appliquer `hardware-safe`.
+- Android local mode: basic validation only;
+- `push` to Speculos: authorize with warnings;
+- `push` to true Ledger USB/HID: apply `hardware-safe`.
 
-Modules cibles :
+Target modules:
 
 - [MainActivity.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/MainActivity.kt:742)
 - [Main.kt](/home/sofian/Sources/ledger-passwords-companion/cli/src/main/kotlin/com/ledgerpasswords/companion/cli/Main.kt:1)
 
-### P1.3 UX d'avertissement avant push réel
+### P1.3 UX warning before real push
 
-Remplacer le popup générique par un résumé de risque lisible :
+Replace the generic popup with a readable risk summary:
 
-- `OK` si rien de notable ;
-- `Avertissement` si corpus proche, dense, ou ambigu ;
-- `Bloqué` si caractères invisibles, confusables sévères, ou raw suspect.
+- `OK` if nothing notable;
+- `Warning` if the corpus is close, dense, or ambiguous;
+- `Blocked` if it contains invisible characters, severe confusables, or suspicious raw data.
 
-Le popup doit mentionner le ou les motifs :
+The popup must mention the reason(s):
 
-- `Espaces en début/fin`
-- `Caractères invisibles`
-- `Noms presque identiques`
-- `Backup brut incohérent`
-- `Nombre d'entrées élevé`
+- `Leading/trailing spaces`
+- `Invisible characters`
+- `Nearly identical names`
+- `Inconsistent raw backup`
+- `High entry count`
 
-## Phase 2 : hygiène de données
+## Phase 2: data hygiene
 
-### P2.1 Normalisation et détection de doublons logiques
+### P2.1 Normalization and detection of logical duplicates
 
-Le companion ne doit pas réécrire silencieusement les nicknames, mais il peut comparer aussi :
+The companion should not silently rewrite the nicknames, but it can also compare:
 
-- valeur brute ;
-- forme `NFC` ;
-- forme `trim()` ;
-- forme `collapse whitespace` si on choisit de la suivre.
+- gross value;
+- form `NFC`;
+- form `trim()`;
+- form `collapse whitespace` if you choose to follow it.
 
-But :
+Purpose:
 
-- empêcher des couples comme `é` / `é` ;
-- empêcher `foo bar` / `foo\u00a0bar` ;
-- empêcher `zerowidth` / `zero\u200bwidth`.
+- prevent pairs like `é` / `é`;
+- prevent `foo bar` / `foo\u00a0bar`;
+- prevent `zerowidth` / `zero\u200bwidth`.
 
-### P2.2 Indicateur de capacité plus conservateur
+### P2.2 More conservative capacity indicator
 
-Le calcul de capacité existe déjà dans [LedgerCapacity.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/LedgerCapacity.kt:1), mais il faut ajouter :
+The capacity calculation already exists in [LedgerCapacity.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/LedgerCapacity.kt:1), but it is necessary to add:
 
-- un seuil de warning avant la limite dure ;
-- un warning spécifique sur les corpus très denses ;
-- un message clair quand le nombre d'entrées est techniquement encodable mais potentiellement risqué pour l'UI Ledger.
+- a warning threshold before the hard limit;
+- a specific warning on very dense corpora;
+- a clear message when the number of entries is technically encodable but potentially risky for the Ledger UI.
 
-Important :
+Important:
 
-- ce n'est pas une preuve qu'une taille "élevée" fait planter ;
-- c'est une mitigation prudente, pas un diagnostic de cause racine.
+- this is not proof that a “high” size causes a crash;
+- this is a cautious mitigation, not a root cause diagnosis.## Phase 3: normal / debug separation
 
-## Phase 3 : séparation normal / debug
+### P3.1 Keep Speculos and lab tools out of normal user flow
 
-### P3.1 Garder Speculos et les outils de labo hors du flux utilisateur normal
+Purpose:
 
-But :
+- avoid mixing safe uses and the stress lab in the same flow.
 
-- éviter de mélanger dans le même flow les usages sûrs et le labo de stress.
+Rules:
 
-Règles :
+- `Speculos`, custom host/port, detailed diagnostics, security overrides remain in `Debug`;
+- normal flow only keeps:
+  - import;
+  - compare ;
+  - export to Ledger;
+  - check.
 
-- `Speculos`, host/port custom, diagnostics détaillés, overrides de sécurité restent dans `Debug` ;
-- le flow normal garde seulement :
-  - importer ;
-  - comparer ;
-  - exporter vers Ledger ;
-  - vérifier.
+### P3.2 Add a `dangerous override` explicitly debug mode
 
-### P3.2 Ajouter un mode `dangerous override` explicitement debug
+Need:
 
-Besoin :
+- certain tests must still be able to push a blocked corpus.
 
-- certains tests doivent pouvoir pousser quand même un corpus bloqué.
+Rule:
 
-Règle :
+- override possible only from `Debug`;
+- never active by default;
+- visually traceable in the UI and in the logs.
 
-- override possible uniquement depuis `Debug` ;
-- jamais actif par défaut ;
-- traçable visuellement dans l'UI et dans les logs.
+## Phase 4: testing and regression
 
-## Phase 4 : test et régression
+### P4.1 Transform the best reproducers into a short suite
 
-### P4.1 Transformer les meilleurs reproducers en suite courte
-
-À garder dans une suite de régression rapide :
+To keep in a rapid regression suite:
 
 - `alpha_beta_push_show_second`
 - `second_len_plus1_show_second`
@@ -210,49 +206,49 @@ Règle :
 - `mixed_unicode_show_all`
 - `dump_partial_then_info_then_pull`
 
-### P4.2 Corriger l'artefact `POPULATE=1`
+### P4.2 Fix artifact `POPULATE=1`
 
-Action :
+Action:
 
-- ajouter une variante de build Speculos sans `POPULATE=1` pour les campagnes produit ;
-- garder `POPULATE=1` seulement si on veut un état de démonstration.
+- add a Speculos build variant without `POPULATE=1` for product campaigns;
+- keep `POPULATE=1` only if you want a demonstration state.
 
-Référence :
+Reference:
 
 - [build-passwords-app.sh](/home/sofian/Sources/ledger-passwords-companion/scripts/build-passwords-app.sh:11)
 
-### P4.3 Faire échouer le CI sur régression de sécurité
+### P4.3 Fail the CI on security regression
 
-But :
+Purpose:
 
-- empêcher qu'un relâchement des garde-fous réintroduise un `push` dangereux.
+- prevent a relaxation of the safeguards from reintroducing a dangerous `push`.
 
-À couvrir :
+To cover:
 
-- tests unitaires `VaultValidator` ;
-- tests de la future `LedgerPushRiskPolicy` ;
-- tests Android/CLI sur les messages et blocages attendus ;
-- E2E émulateur + Speculos sur cas safe.
+- unit tests `VaultValidator`;
+- tests of the future `LedgerPushRiskPolicy`;
+- Android/CLI tests on expected messages and blockages;
+- E2E emulator + Speculos on safe case.
 
-## Plan d'implémentation recommandé
+## Recommended implementation plan
 
-1. Étendre `VaultValidator` avec les caractères interdits et les catégories de risque.
-2. Ajouter `LedgerPushRiskPolicy` dans `core`.
-3. Brancher cette politique dans Android avant `push` réel.
-4. Brancher la même politique dans la CLI avant `device push --hid`.
-5. Ajouter le popup d'avertissement enrichi et le blocage `hardware-safe`.
-6. Ajouter les tests unitaires de validation et de policy.
-7. Ajouter une variante Speculos sans `POPULATE=1`.
-8. Ajouter une suite courte de régression à partir des reproducers confirmés.
+1. Extend `VaultValidator` with prohibited characters and risk categories.
+2. Add `LedgerPushRiskPolicy` in `core`.
+3. Plug this policy into Android before `push` real.
+4. Plug the same policy into the CLI before `device push --hid`.
+5. Add rich warning popup and `hardware-safe` blocking.
+6. Add validation and policy unit tests.
+7. Add a Speculos variant without `POPULATE=1`.
+8. Add a short regression sequence from confirmed reproducers.
 
-## Critères d'acceptation
+## Acceptance criteria
 
-Le plan sera considéré correctement implémenté quand :
+The plan will be considered correctly implemented when:
 
-1. un nickname avec espace interne reste autorisé ;
-2. un nickname avec zero-width ou bidi control est bloqué avant `push` réel ;
-3. des doublons logiques Unicode sont bloqués ou demandent un override debug ;
-4. un backup brut suspect ne peut pas être poussé sur vrai Ledger ;
-5. `push` réel et `verify` restent séparés ;
-6. les cas safe existants restent verts sur Speculos et sur l'émulateur Android ;
-7. la doc utilisateur explique clairement qu'un `push` réel est filtré par une politique de sécurité du companion.
+1. a nickname with an internal space remains authorized;
+2. a nickname with zero-width or bidi control is blocked before `push` real;
+3. Unicode logical duplicates are blocked or require a debug override;
+4. a suspicious raw backup cannot be pushed to real Ledger;
+5. `push` real and `verify` remain separate;
+6. existing safe cases remain green on Speculos and on the Android emulator;
+7. the user doc clearly explains that a real `push` is filtered by a companion security policy.

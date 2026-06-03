@@ -47,7 +47,7 @@ class TimingCase:
 CASES: tuple[TimingCase, ...] = (
     TimingCase(
         case_id="sofian_manual_push_show_seed61",
-        note="Push avec approbation jitterée, puis show immédiat",
+        note="Push with jittered approval, then immediate show",
         random_seed=61,
         entries=(SeedEntry("sofian terki"),),
         setup_kind="empty",
@@ -56,7 +56,7 @@ CASES: tuple[TimingCase, ...] = (
     ),
     TimingCase(
         case_id="sofian_push_verify_pull_burst_seed62",
-        note="Push puis rafale verify/pull/diff avec micro-délais",
+        note="Push then burst verify/pull/diff with micro-delays",
         random_seed=62,
         entries=(SeedEntry("sofian terki"),),
         setup_kind="empty",
@@ -65,7 +65,7 @@ CASES: tuple[TimingCase, ...] = (
     ),
     TimingCase(
         case_id="alpha_beta_manual_push_show_second_seed63",
-        note="Push jitteré puis show du second item sur alpha/beta",
+        note="Jittered push then show the second item on alpha/beta",
         random_seed=63,
         entries=(SeedEntry("alpha"), SeedEntry("beta")),
         setup_kind="empty",
@@ -74,7 +74,7 @@ CASES: tuple[TimingCase, ...] = (
     ),
     TimingCase(
         case_id="leading_space_manual_push_delete_seed64",
-        note="Push jitteré avec espace initial puis delete immédiat",
+        note="Jittered push with leading space then immediate delete",
         random_seed=64,
         entries=(SeedEntry(" leading"),),
         setup_kind="empty",
@@ -83,7 +83,7 @@ CASES: tuple[TimingCase, ...] = (
     ),
     TimingCase(
         case_id="multi_concurrent_reads_seed65",
-        note="Push puis concurrence de lectures CLI avec faibles décalages",
+        note="Push then concurrent CLI reads with small offsets",
         random_seed=65,
         entries=(SeedEntry("github"), SeedEntry("gmail"), SeedEntry("proton")),
         setup_kind="empty",

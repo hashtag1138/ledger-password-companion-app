@@ -1,43 +1,43 @@
-# Prompt de continuation pour Codex
+# Continuation prompt for Codex
 
-Tu travailles dans le repository `ledger-passwords-companion`.
+You are working in the `ledger-passwords-companion` repository.
 
-Objectif global : implémenter une app companion Android pour Ledger Passwords. L'app gère uniquement les metadata/nicknames, jamais la seed, jamais les mots de passe finaux.
+Overall objective: implement an Android companion app for Ledger Passwords. The app only manages metadata/nicknames, never the seed, never the final passwords.
 
-Contraintes incontournables :
+Unavoidable constraints:
 
-- préserver la séparation `core` / `ledger-protocol` / `cli` / `android-app` ;
-- ne pas introduire Android dans `core` ni `ledger-protocol` ;
-- faire passer les tests avant d'ajouter des features ;
-- respecter le format metadata Ledger : `[length][kind][charsets][nickname]` ;
-- nickname max 19 octets UTF-8 ;
-- storage metadata par défaut 4096 bytes ;
-- charsets bitmask compatible Ledger Web UI ;
-- `0x00` ou `0xFF` pour tous les charsets ;
-- pas de génération ni d'affichage de mot de passe dans Android ou CLI ;
-- ne pas ajouter de réseau/telemetry.
+- preserve the separation `core` / `ledger-protocol` / `cli` / `android-app`;
+- do not introduce Android in `core` nor `ledger-protocol`;
+- run the tests before adding features;
+- respect the Ledger metadata format: `[length][kind][charsets][nickname]`;
+- nickname max 19 UTF-8 bytes;
+- storage metadata by default 4096 bytes;
+- Ledger Web UI compatible bitmask charsets;
+- `0x00` or `0xFF` for all charsets;
+- no password generation or display in Android or CLI;
+- do not add network/telemetry.
 
-Première mission recommandée :
+First recommended mission:
 
-1. lancer `./gradlew :core:test :ledger-protocol:test` ;
-2. corriger les erreurs de compilation ;
-3. compléter les tests de `MetadataCodecTest` ;
-4. compléter `BackupJsonCodecTest` ;
-5. finaliser la CLI offline pour `list`, `validate`, `add`, `delete`, `rename`, `edit`, `export-raw`.
+1. launch `./gradlew :core:test :ledger-protocol:test` ;
+2. correct compilation errors;
+3. complete the `MetadataCodecTest` tests;
+4. complete `BackupJsonCodecTest`;
+5. finalize the offline CLI for `list`, `validate`, `add`, `delete`, `rename`, `edit`, `export-raw`.
 
-Ensuite :
+Then:
 
-1. implémenter `LedgerHidFraming` ;
-2. implémenter `PcHidLedgerTransport` ou `SpeculosTransport` ;
-3. implémenter `AndroidUsbLedgerTransport` ;
-4. ajouter l'écran Android de sync pull/push avec diff.
+1. implement `LedgerHidFraming` ;
+2. implement `PcHidLedgerTransport` or `SpeculosTransport` ;
+3. implement `AndroidUsbLedgerTransport` ;
+4. add Android pull/push sync screen with diff.
 
-Avant chaque push vers Ledger, l'app doit :
+Before each push to Ledger, the app must:
 
-- valider le vault ;
-- dumper le device ;
-- afficher un diff ;
-- créer un backup local ;
-- demander confirmation utilisateur ;
-- demander validation physique sur le Ledger ;
-- relire le device après écriture et comparer.
+- validate the vault;
+- dump the device;
+- display a diff;
+- create a local backup;
+- request user confirmation;
+- request physical validation on the Ledger;
+- reread the device after writing and compare.

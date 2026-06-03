@@ -1,21 +1,21 @@
-# ADR 0002 — Pas de génération de mot de passe sur téléphone
+# ADR 0002 - No Password Generation on the Phone
 
-## Statut
+## Status
 
-Accepté.
+Accepted.
 
-## Décision
+## Decision
 
-Le companion Android ne génère pas et n'affiche pas les mots de passe finaux.
+The Android companion does not generate or display final passwords.
 
-## Raisons
+## Reasons
 
-- Le Ledger doit rester l'autorité cryptographique.
-- L'objectif est de gérer les identifiants, pas de remplacer l'app Passwords.
-- Réduire la surface d'attaque et le risque UX.
+- The Ledger must remain the cryptographic authority.
+- The goal is to manage identifiers, not replace the Passwords app.
+- Reduce attack surface and UX risk.
 
-## Conséquences
+## Consequences
 
-- Pas de fonction “show password”.
-- Pas d'autofill Android en V1.
-- Pas de demande de seed ou secret.
+- No "show password" function.
+- No Android autofill in V1.
+- No seed or secret request.

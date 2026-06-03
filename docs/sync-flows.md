@@ -1,57 +1,57 @@
-# Flows de synchronisation
+# Synchronization Flows
 
 ## Sources
 
 ```text
-LocalVault     état édité dans l'app
-DeviceVault    état lu depuis Ledger
-ImportedVault  état lu depuis backup.json
+LocalVault     state edited in the app
+DeviceVault    state read from the Ledger
+ImportedVault  state read from backup.json
 ```
 
-## Pull depuis Ledger
+## Pull from Ledger
 
 ```text
-1. Brancher Ledger
-2. Ouvrir app Passwords sur Ledger
-3. Android demande permission USB
+1. Connect Ledger
+2. Open Passwords app on Ledger
+3. Android requests USB permission
 4. getAppInfo
 5. getAppConfig
 6. dumpMetadatas
-7. Validation physique sur Ledger
+7. Physical approval on Ledger
 8. Decode raw metadata
-9. Afficher liste + diff avec local
-10. Choisir remplacer local ou fusionner
+9. Show list + diff against local
+10. Choose replace local or merge
 ```
 
-## Push vers Ledger
+## Push to Ledger
 
 ```text
-1. Valider LocalVault
-2. Brancher Ledger
+1. Validate LocalVault
+2. Connect Ledger
 3. getAppInfo = Passwords
 4. getAppConfig
-5. dump DeviceVault pour diff
-6. Afficher diff
-7. Backup automatique local
-8. Confirmation utilisateur dans Android/CLI
-9. loadMetadatas par chunks
-10. Validation physique sur Ledger
-11. dump après écriture
-12. Comparaison raw attendu vs raw relu
+5. dump DeviceVault for diff
+6. Show diff
+7. Automatic local backup
+8. User confirmation in Android/CLI
+9. loadMetadatas in chunks
+10. Physical approval on Ledger
+11. dump after writing
+12. Compare expected raw vs reread raw
 ```
 
 ## Merge
 
-Stratégie MVP :
+MVP strategy:
 
-- union par nickname ;
-- conflit si même nickname mais charsets différents ;
-- l'utilisateur choisit local ou device ;
-- pas de détection automatique de rename.
+- union by nickname;
+- conflict if the same nickname has different charsets;
+- user chooses local or device;
+- no automatic rename detection.
 
-Pourquoi pas de rename automatique : deux entrées avec charsets identiques et noms différents peuvent être deux vrais comptes différents. Le rename est fonctionnellement un delete + add du point de vue mot de passe généré.
+Why no automatic rename: two entries with identical charsets and different names may be two genuinely different accounts. From the generated-password point of view, rename is functionally a delete + add.
 
-## États UI sync
+## Sync UI States
 
 ```text
 Idle

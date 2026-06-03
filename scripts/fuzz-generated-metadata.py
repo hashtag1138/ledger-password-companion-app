@@ -65,21 +65,21 @@ RAW_BLANK_MIX_ENTRIES = (
 CASES: tuple[GeneratedCase, ...] = (
     GeneratedCase(
         case_id="empty_control_pull",
-        note="Vault vide de contrôle via backup.json",
+        note="Empty control vault via backup.json",
         setup_mode="json",
         entries=(),
         post_action="none",
     ),
     GeneratedCase(
         case_id="json_maxcount_177_pull",
-        note="177 entrées valides générées via backup.json",
+        note="177 valid entries generated via backup.json",
         setup_mode="json",
         entries=VALID_MAXCOUNT_ENTRIES,
         post_action="none",
     ),
     GeneratedCase(
         case_id="raw_storage_edge_186_show_last",
-        note="186 entrées de 19 octets exacts générées en raw jusqu'à 4094 octets",
+        note="186 exact 19-byte entries generated as raw up to 4094 bytes",
         setup_mode="raw",
         entries=RAW_STORAGE_EDGE_ENTRIES,
         post_action="show",
@@ -88,7 +88,7 @@ CASES: tuple[GeneratedCase, ...] = (
     ),
     GeneratedCase(
         case_id="raw_overlong_20byte_show",
-        note="Nickname raw de 20 octets, hors limite companion mais décodable par l'app",
+        note="20-byte raw nickname, beyond companion limits but still decodable by the app",
         setup_mode="raw",
         entries=(RAW_OVERLONG_ENTRY,),
         post_action="show",
@@ -98,7 +98,7 @@ CASES: tuple[GeneratedCase, ...] = (
     ),
     GeneratedCase(
         case_id="raw_blank_plain_space_show_second",
-        note="Entrées raw avec nickname vide et whitespace, puis show du second item visible",
+        note="Raw entries with blank nickname and whitespace, then show the visible second item",
         setup_mode="raw",
         entries=RAW_BLANK_MIX_ENTRIES,
         post_action="show",

@@ -29,21 +29,21 @@ class NicknameCase:
 
 
 CORPUS: tuple[NicknameCase, ...] = (
-    NicknameCase("sofian_space", "sofian terki", "Incident réel observé sur vrai Ledger"),
-    NicknameCase("leading_space", " leading", "Espace en tête"),
-    NicknameCase("trailing_space", "trailing ", "Espace final"),
-    NicknameCase("double_space", "double  gap", "Double espace interne"),
-    NicknameCase("tab_inside", "tab\tinside", "Tabulation interne"),
-    NicknameCase("newline_inside", "line\nbreak", "Retour ligne interne"),
+    NicknameCase("sofian_space", "sofian terki", "Real incident observed on a real Ledger"),
+    NicknameCase("leading_space", " leading", "Leading space"),
+    NicknameCase("trailing_space", "trailing ", "Trailing space"),
+    NicknameCase("double_space", "double  gap", "Double internal space"),
+    NicknameCase("tab_inside", "tab\tinside", "Internal tab"),
+    NicknameCase("newline_inside", "line\nbreak", "Internal newline"),
     NicknameCase("slash_inside", "slash/name", "Slash"),
     NicknameCase("backslash_inside", r"back\slash", "Backslash"),
     NicknameCase("apostrophe", "apo'strophe", "Apostrophe simple"),
     NicknameCase("quote_backtick", "quo\"te`", "Guillemet et backtick"),
-    NicknameCase("accented", "accentué", "Accent UTF-8 simple"),
+    NicknameCase("accented", "café", "Simple UTF-8 accent"),
     NicknameCase("combining", "e\u0301cole", "Combining mark"),
     NicknameCase("zero_width", "zero\u200bwidth", "Zero-width space"),
     NicknameCase("bidi_mark", "abc\u202ertl", "Bidi override"),
-    NicknameCase("max_19_ascii", "abcdefghijklmnopqrs", "19 octets ASCII exacts"),
+    NicknameCase("max_19_ascii", "abcdefghijklmnopqrs", "Exact 19-byte ASCII"),
 )
 
 SCENARIOS = ("show", "type", "delete")

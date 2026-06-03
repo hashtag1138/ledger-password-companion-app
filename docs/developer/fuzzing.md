@@ -1,16 +1,16 @@
-# Fuzzing et campagnes Speculos
+# Fuzzing and Speculos Campaigns
 
-Le fuzzing de ce repo passe par la CLI et Speculos. Le but est de casser `app-passwords` sans toucher un vrai Ledger.
+Fuzzing in this repository goes through the CLI and Speculos. The goal is to break `app-passwords` without touching a real Ledger.
 
-## Composants du harness
+## Harness Components
 
-Scripts principaux :
+Main scripts:
 
 - [speculos_fuzz_lib.py](../../scripts/speculos_fuzz_lib.py)
 - [fuzz_oracles.py](../../scripts/fuzz_oracles.py)
 - [fuzz-oracle-consolidation.py](../../scripts/fuzz-oracle-consolidation.py)
 
-Fuzzers par campagne :
+Campaign fuzzers:
 
 - `fuzz-dangerous-nicknames.py`
 - `fuzz-stateful-scenarios.py`
@@ -28,13 +28,13 @@ Fuzzers par campagne :
 - `fuzz-low-level-apdu.py`
 - `fuzz-incident-regression.py`
 
-## Prérequis
+## Prerequisites
 
-1. Build l'app Passwords pour Speculos.
-2. Lancer Speculos.
-3. S'assurer que la CLI est installée.
+1. Build the Passwords app for Speculos.
+2. Start Speculos.
+3. Make sure the CLI is installed.
 
-Exemple minimal :
+Minimal example:
 
 ```bash
 scripts/build-passwords-app.sh --no-populate
@@ -42,7 +42,7 @@ scripts/run-speculos-passwords.sh build/speculos/app-passwords/bin/app.elf
 ./gradlew :cli:installDist
 ```
 
-## Validation rapide du harness
+## Quick Harness Validation
 
 ```bash
 python3 -m py_compile scripts/speculos_fuzz_lib.py scripts/fuzz_oracles.py
@@ -50,9 +50,9 @@ bash -n scripts/run-speculos-passwords.sh scripts/speculos-smoke.sh scripts/spec
 scripts/speculos-smoke.sh --auto-approve
 ```
 
-## Lancer une campagne ciblée
+## Run a Targeted Campaign
 
-Exemples :
+Examples:
 
 ```bash
 ./scripts/fuzz-dangerous-nicknames.py --cases sofian_space,leading_space
@@ -61,9 +61,9 @@ Exemples :
 ./scripts/fuzz-incident-regression.py --cases alpha_beta_push_show_second --json-out /tmp/fz15-smoke.json
 ```
 
-## Lancer une campagne complète
+## Run a Full Campaign
 
-Exemples :
+Examples:
 
 ```bash
 ./scripts/fuzz-list-menus.py --json-out /tmp/fz09-full.json
@@ -72,9 +72,9 @@ Exemples :
 ./scripts/fuzz-oracle-consolidation.py --json-out /tmp/fz16-full.json
 ```
 
-## Oracles disponibles
+## Available Oracles
 
-Le harness consolide notamment :
+The harness notably consolidates:
 
 - `speculos_crash`
 - `transport_closed`
@@ -87,17 +87,17 @@ Le harness consolide notamment :
 - `unexpected_screen`
 - `empty_screen`
 
-## Références de campagne
+## Campaign References
 
-Vue d'ensemble :
+Overview:
 
-- [Tracker détaillé](../fuzzing-tracker.md)
-- [Rapport de findings](../fuzzing-findings-report.md)
-- [Plan de mitigation](../companion-mitigation-plan.md)
+- [Detailed tracker](../fuzzing-tracker.md)
+- [Findings report](../fuzzing-findings-report.md)
+- [Mitigation plan](../companion-mitigation-plan.md)
 
-## Reproducers prioritaires
+## Priority Reproducers
 
-Cas à garder sous la main :
+Keep these cases close at hand:
 
 - `alpha_beta_push_show_second`
 - `second_len_plus1_show_second`
@@ -106,10 +106,10 @@ Cas à garder sous la main :
 - `mixed_unicode_show_all`
 - `dump_partial_then_info_then_pull`
 
-## Bonnes pratiques
+## Good Practices
 
-- utiliser `--no-populate` pour les campagnes produit ;
-- garder `POPULATE=1` seulement pour des démos ou certains harness historiques ;
-- écrire chaque campagne avec `--json-out` ;
-- ne pas conclure trop vite sur le vrai hardware à partir de Speculos seul ;
-- revalider les reproducers clés après toute modification du companion ou du harness.
+- use `--no-populate` for product campaigns;
+- keep `POPULATE=1` only for demos or some historical harnesses;
+- write every campaign with `--json-out`;
+- do not conclude too quickly about real hardware from Speculos alone;
+- revalidate key reproducers after any change to the companion or the harness.

@@ -171,7 +171,7 @@ internal fun LedgerPasswordsCompanionShell(
     fun copyNicknameToClipboard(nickname: String) {
         clipboardManager.setText(AnnotatedString(nickname))
         coroutineScope.launch {
-            snackbarHostState.showSnackbar("Identifiant copié")
+            snackbarHostState.showSnackbar("Identifier copied")
         }
     }
 
@@ -191,6 +191,7 @@ internal fun LedgerPasswordsCompanionShell(
                             Row(
                                 modifier =
                                     Modifier
+                                        .testTag(UiTags.DialogStartupDontShowAgain)
                                         .fillMaxWidth()
                                         .clip(MaterialTheme.shapes.small)
                                         .clickable {
@@ -206,7 +207,7 @@ internal fun LedgerPasswordsCompanionShell(
                                         onStartupWarningDismissPreferenceChanged(checked)
                                     },
                                 )
-                                Text("Ne plus afficher au démarrage")
+                                Text("Don't show on startup")
                             }
                         }
                     }
@@ -280,7 +281,7 @@ internal fun LedgerPasswordsCompanionShell(
                                 }
                             } else {
                                 IconButton(onClick = onBackToHome) {
-                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Retour")
+                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                                 }
                             }
                         },
@@ -415,12 +416,12 @@ private fun OverflowMenu(
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("Réglages") },
+            text = { Text("Settings") },
             onClick = onOpenSettings,
             leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
         )
         DropdownMenuItem(
-            text = { Text("À propos") },
+            text = { Text("About") },
             onClick = onOpenAbout,
             leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null) },
         )
@@ -460,8 +461,8 @@ private fun HomeDashboardScreen(
     ) {
         item {
             SectionCard(
-                title = "Vault local",
-                subtitle = "${vault.entries.size} identifiants disponibles",
+                title = "Local vault",
+                subtitle = "${vault.entries.size} identifiers available",
             ) {
                 Text(
                     localVaultMessage,
@@ -480,7 +481,7 @@ private fun HomeDashboardScreen(
                     ) {
                         Icon(Icons.Rounded.CloudSync, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Synchroniser")
+                        Text("Sync")
                     }
                     Box {
                         OutlinedButton(onClick = { actionsExpanded = true }) {
@@ -490,7 +491,7 @@ private fun HomeDashboardScreen(
                         }
                         DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
                             DropdownMenuItem(
-                                text = { Text("Importer backup.json") },
+                                text = { Text("Import backup.json") },
                                 onClick = {
                                     actionsExpanded = false
                                     onImportBackup()
@@ -498,7 +499,7 @@ private fun HomeDashboardScreen(
                                 leadingIcon = { Icon(Icons.Rounded.Download, contentDescription = null) },
                             )
                             DropdownMenuItem(
-                                text = { Text("Exporter backup.json") },
+                                text = { Text("Export backup.json") },
                                 onClick = {
                                     actionsExpanded = false
                                     onExportBackup()
@@ -512,12 +513,12 @@ private fun HomeDashboardScreen(
         }
 
         item {
-            SectionCard(title = "Identifiants", subtitle = "Appui sur une ligne pour éditer, appui long ou icône pour copier") {
+            SectionCard(title = "Identifiers", subtitle = "Tap a row to edit, long-press or use the icon to copy") {
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Filtrer les nicknames") },
+                    label = { Text("Filter nicknames") },
                     singleLine = true,
                 )
             }
@@ -525,12 +526,12 @@ private fun HomeDashboardScreen(
 
         if (filteredEntries.isEmpty()) {
             item {
-                SectionCard(title = "Aucun résultat") {
+                SectionCard(title = "No results") {
                     Text(
                         if (vault.entries.isEmpty()) {
-                            "Ajoute un identifiant ou importe un backup.json pour commencer."
+                            "Add an identifier or import a backup.json file to get started."
                         } else {
-                            "Aucun identifiant ne correspond à ce filtre."
+                            "No identifier matches this filter."
                         },
                     )
                 }
@@ -578,24 +579,24 @@ private fun EntryWorkbenchScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         HeroCard(
-            title = if (state.isCreation) "Nouvel identifiant" else "Modifier l’identifiant",
-            subtitle = "Le nickname est limité par Ledger. Toute modification peut changer le mot de passe généré.",
+            title = if (state.isCreation) "New identifier" else "Edit identifier",
+            subtitle = "Nickname length is limited by Ledger. Any change can alter the generated password.",
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatPill("${state.nicknameByteCount}/${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} octets UTF-8")
+                StatPill("${state.nicknameByteCount}/${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} UTF-8 bytes")
                 previewCapacity?.let {
-                    StatPill("${it.usedBytes}/${it.storageSize} octets après sauvegarde")
+                    StatPill("${it.usedBytes}/${it.storageSize} bytes after save")
                 }
             }
         }
 
         if (!state.isCreation && state.originalNickname != state.nickname.trim()) {
             SectionCard(title = "Impact") {
-                Text("Renommer un identifiant modifie le mot de passe que Ledger Passwords générera ensuite.")
+                Text("Renaming an identifier changes the password Ledger Passwords will generate afterward.")
             }
         }
 
-        SectionCard(title = "Nickname", subtitle = "Maximum 19 octets UTF-8") {
+        SectionCard(title = "Nickname", subtitle = "Maximum 19 UTF-8 bytes") {
             OutlinedTextField(
                 value = state.nickname,
                 onValueChange = onNicknameChange,
@@ -606,16 +607,16 @@ private fun EntryWorkbenchScreen(
                 supportingText = {
                     Text(
                         when {
-                            nicknameTooLong -> "Trop long pour Ledger. Raccourcis le nickname."
-                            state.nickname.trim().isBlank() -> "Le nickname ne doit pas être vide."
-                            else -> "Compte tenu en octets UTF-8, pas seulement en caractères."
+                            nicknameTooLong -> "Too long for Ledger. Shorten the nickname."
+                            state.nickname.trim().isBlank() -> "Nickname must not be blank."
+                            else -> "Counted in UTF-8 bytes, not just characters."
                         },
                     )
                 },
             )
         }
 
-        SectionCard(title = "Charsets", subtitle = "Choisis au moins un groupe autorisé") {
+        SectionCard(title = "Charsets", subtitle = "Choose at least one allowed set") {
             CharsetFlag.entries.forEach { flag ->
                 Row(
                     modifier =
@@ -635,7 +636,7 @@ private fun EntryWorkbenchScreen(
                                 .background(if (flag in state.selectedFlags) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(flag.frenchLabel(), fontWeight = FontWeight.Medium)
+                        Text(flag.displayLabel(), fontWeight = FontWeight.Medium)
                         Text(flag.ledgerName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
@@ -648,7 +649,7 @@ private fun EntryWorkbenchScreen(
 
         previewCapacity?.let {
             SectionCard(
-                title = "Capacité Ledger",
+                title = "Ledger capacity",
                 subtitle = previewValidation?.takeIf { !it.isValid }?.issues?.joinToString(" • ") { issue -> issue.message },
             ) {
                 LinearProgressIndicator(
@@ -656,23 +657,23 @@ private fun EntryWorkbenchScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))
-                Text("${it.usedBytes}/${it.storageSize} octets utilisés, ${it.remainingBytes.coerceAtLeast(0)} restants")
-                Text("${it.entryCount}/${it.maxEntryCount} slots utilisés")
+                Text("${it.usedBytes}/${it.storageSize} bytes used, ${it.remainingBytes.coerceAtLeast(0)} remaining")
+                Text("${it.entryCount}/${it.maxEntryCount} slots used")
             }
         }
 
         state.errorMessage?.let {
-            SectionCard(title = "Blocage") {
+            SectionCard(title = "Blocked") {
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Button(onClick = onSave, enabled = canSave, modifier = Modifier.weight(1f).testTag(UiTags.EntrySave)) {
-                Text(if (state.isCreation) "Ajouter" else "Sauvegarder")
+                Text(if (state.isCreation) "Add" else "Save")
             }
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
-                Text("Annuler")
+                Text("Cancel")
             }
         }
         if (!state.isCreation) {
@@ -685,7 +686,7 @@ private fun EntryWorkbenchScreen(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
             ) {
-                Text("Supprimer cet identifiant")
+                Text("Delete this identifier")
             }
         }
     }
@@ -730,36 +731,36 @@ private fun SyncOperationsScreen(
     ) {
         item {
             HeroCard(
-                title = if (transportMode == SyncTransportMode.Usb) "Synchronisation Ledger" else "Synchronisation de test",
-                subtitle = "Lis, compare puis n'écris sur la cible que si le diff est compris.",
+                title = if (transportMode == SyncTransportMode.Usb) "Ledger sync" else "Test sync",
+                subtitle = "Read, compare, then write to the target only if you understand the diff.",
             ) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatPill(syncUiState.deviceName ?: "Aucune cible")
-                    StatPill("${localVault.entries.size} locaux")
-                    StatPill("${syncUiState.deviceEntries?.toString() ?: "-"} sur la cible")
+                    StatPill(syncUiState.deviceName ?: "No target")
+                    StatPill("${localVault.entries.size} local entries")
+                    StatPill("${syncUiState.deviceEntries?.toString() ?: "-"} on target")
                 }
             }
         }
 
         item {
-            SectionCard(title = "État courant", subtitle = syncUiState.status.frenchLabel()) {
+            SectionCard(title = "Current state", subtitle = syncUiState.status.displayLabel()) {
                 Text(syncUiState.statusMessage, modifier = Modifier.testTag(UiTags.SyncStatusMessage))
                 Spacer(Modifier.height(10.dp))
-                Text("App : ${syncUiState.appName ?: "-"} ${syncUiState.appVersion ?: ""}".trim())
-                Text("Storage : ${syncUiState.storageSize?.toString() ?: "-"}")
-                Text("Capacité locale : ${localCapacity.usedBytes}/${localCapacity.storageSize} octets")
+                Text("App: ${syncUiState.appName ?: "-"} ${syncUiState.appVersion ?: ""}".trim())
+                Text("Storage: ${syncUiState.storageSize?.toString() ?: "-"}")
+                Text("Local capacity: ${localCapacity.usedBytes}/${localCapacity.storageSize} bytes")
                 if (syncUiState.showVerifyCallToAction) {
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(onClick = onVerifyLedger, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Rounded.Verified, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Vérifier maintenant")
+                        Text("Verify now")
                     }
                 }
                 if (transportMode == SyncTransportMode.Usb && dangerousOverrideEnabled) {
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Override dangereux actif : la policy hardware-safe peut être contournée depuis Debug.",
+                        "Dangerous override enabled: the hardware-safe policy can be bypassed from Debug.",
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
@@ -768,7 +769,11 @@ private fun SyncOperationsScreen(
 
         if (syncUiState.diffLines.isNotEmpty()) {
             item {
-                SectionCard(title = "Diff local vs Ledger", subtitle = syncUiState.diffSummary) {
+                SectionCard(
+                    title = "Local vs Ledger diff",
+                    subtitle = syncUiState.diffSummary,
+                    modifier = Modifier.testTag(UiTags.SyncDiffSection),
+                ) {
                     syncUiState.diffLines.forEach { line ->
                         Text(line, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -777,26 +782,27 @@ private fun SyncOperationsScreen(
         }
 
         item {
-            SectionCard(title = "Lecture & comparaison") {
-                ActionButton("Rafraîchir la cible", Icons.Rounded.CloudSync, onRefreshDevice, enabled = !busy, tag = UiTags.SyncRefresh)
+            SectionCard(title = "Read & compare") {
+                ActionButton("Refresh target", Icons.Rounded.CloudSync, onRefreshDevice, enabled = !busy, tag = UiTags.SyncRefresh)
                 if (transportMode == SyncTransportMode.Usb) {
                     Spacer(Modifier.height(10.dp))
-                    ActionButton("Demander la permission USB", Icons.Rounded.Verified, onRequestPermission, enabled = !busy)
+                    ActionButton("Request USB permission", Icons.Rounded.Verified, onRequestPermission, enabled = !busy)
                 }
                 Spacer(Modifier.height(10.dp))
-                ActionButton("Importer depuis Ledger", Icons.Rounded.Download, onPullFromLedger, enabled = !busy, tag = UiTags.SyncPull)
+                ActionButton("Import from Ledger", Icons.Rounded.Download, onPullFromLedger, enabled = !busy, tag = UiTags.SyncPull)
                 Spacer(Modifier.height(10.dp))
-                ActionButton("Comparer le local avec la cible", Icons.Rounded.Edit, onCompareWithLedger, enabled = !busy)
+                ActionButton("Compare local with target", Icons.Rounded.Edit, onCompareWithLedger, enabled = !busy)
             }
         }
 
         item {
             SectionCard(
-                title = "Écriture & contrôle final",
-                subtitle = "Exporter remplace tout le bloc metadata présent sur la cible.",
+                title = "Write & final check",
+                subtitle = "Export replaces the entire metadata block currently on the target.",
+                modifier = Modifier.testTag(UiTags.SyncWriteSection),
             ) {
                 ActionButton(
-                    label = "Exporter le local vers Ledger",
+                    label = "Export local to Ledger",
                     icon = Icons.Rounded.Upload,
                     onClick = onPushToLedger,
                     enabled = !busy,
@@ -805,7 +811,7 @@ private fun SyncOperationsScreen(
                 )
                 Spacer(Modifier.height(10.dp))
                 ActionButton(
-                    label = "Vérifier la cohérence finale",
+                    label = "Verify final consistency",
                     icon = Icons.Rounded.Verified,
                     onClick = onVerifyLedger,
                     enabled = !busy,
@@ -816,7 +822,7 @@ private fun SyncOperationsScreen(
                     OutlinedButton(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Rounded.BugReport, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Outils de test")
+                        Text("Test tools")
                     }
                 }
             }
@@ -843,53 +849,61 @@ private fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         HeroCard(
-            title = "Réglages",
-            subtitle = "Confirme les actions sensibles et choisis ce qui doit s'afficher au démarrage.",
+            title = "Settings",
+            subtitle = "Confirm sensitive actions and choose what appears on startup.",
         ) {
-            Text("Les réglages de test et les contournements risqués restent isolés dans l'écran Debug.")
+            Text("Test settings and risky overrides stay isolated in the Debug screen.")
         }
 
-        SectionCard(title = "Sécurité des écritures") {
+        SectionCard(title = "Write safety") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Confirmer avant chaque push matériel", fontWeight = FontWeight.Medium)
+                    Text("Confirm before every hardware push", fontWeight = FontWeight.Medium)
                     Text(
-                        "Conserve un popup de confirmation avant tout export vers un vrai Ledger.",
+                        "Keep a confirmation prompt before any export to a real Ledger.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Switch(checked = confirmationEnabled, onCheckedChange = onConfirmationChanged)
+                Switch(
+                    checked = confirmationEnabled,
+                    onCheckedChange = onConfirmationChanged,
+                    modifier = Modifier.testTag(UiTags.SettingsPushConfirmationSwitch),
+                )
             }
         }
 
-        SectionCard(title = "Avertissement au démarrage") {
+        SectionCard(title = "Startup warning") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Afficher l'avertissement expérimental", fontWeight = FontWeight.Medium)
+                    Text("Show experimental warning", fontWeight = FontWeight.Medium)
                     Text(
-                        "Rappelle au lancement que l'app reste expérimentale avant toute écriture réelle.",
+                        "Reminds you on launch that the app remains experimental before any real write.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Switch(checked = startupWarningEnabled, onCheckedChange = onStartupWarningEnabledChanged)
+                Switch(
+                    checked = startupWarningEnabled,
+                    onCheckedChange = onStartupWarningEnabledChanged,
+                    modifier = Modifier.testTag(UiTags.SettingsStartupWarningSwitch),
+                )
             }
         }
 
-        SectionCard(title = "Debug séparé") {
-            Text("Les transports de test et l'override dangereux restent regroupés dans un écran séparé.")
+        SectionCard(title = "Separate debug") {
+            Text("Test transports and the dangerous override remain grouped in a separate screen.")
             if (dangerousOverrideEnabled) {
                 Text(
-                    "Un override dangereux est actuellement actif dans Debug.",
+                    "A dangerous override is currently enabled in Debug.",
                     color = MaterialTheme.colorScheme.error,
                 )
             }
@@ -897,7 +911,7 @@ private fun SettingsScreen(
             OutlinedButton(onClick = onOpenDebug) {
                 Icon(Icons.Rounded.BugReport, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Ouvrir Debug")
+                Text("Open Debug")
             }
         }
     }
@@ -919,36 +933,36 @@ private fun AboutScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         HeroCard(
-            title = "À propos",
-            subtitle = "Companion Android pour préparer, sauvegarder et synchroniser les metadata Ledger Passwords.",
+            title = "About",
+            subtitle = "Android companion to prepare, back up, and sync Ledger Passwords metadata.",
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatPill("Companion Android")
-                StatPill("${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} octets max / nickname")
-                StatPill("$storageSize octets de storage")
+                StatPill("Android companion")
+                StatPill("${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} bytes max / nickname")
+                StatPill("$storageSize bytes of storage")
             }
         }
 
-        SectionCard(title = "Contraintes Ledger") {
-            Text("Un nickname est limité à 19 octets UTF-8.")
-            Text("Le bloc metadata est limité par le storage de l’app Ledger Passwords.")
-            Text("Toute modification locale est validée avant export pour éviter un metadata invalide.")
+        SectionCard(title = "Ledger constraints") {
+            Text("A nickname is limited to 19 UTF-8 bytes.")
+            Text("The metadata block is limited by the Ledger Passwords app storage.")
+            Text("Every local change is validated before export to avoid invalid metadata.")
         }
 
-        SectionCard(title = "Capacité locale actuelle") {
+        SectionCard(title = "Current local capacity") {
             LinearProgressIndicator(
                 progress = { capacity.usageRatio.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(10.dp))
-            Text("${capacity.entryCount}/${capacity.maxEntryCount} identifiants théoriques")
-            Text("${capacity.usedBytes}/${capacity.storageSize} octets utilisés")
-            Text("${capacity.remainingBytes.coerceAtLeast(0)} octets restants")
+            Text("${capacity.entryCount}/${capacity.maxEntryCount} theoretical identifiers")
+            Text("${capacity.usedBytes}/${capacity.storageSize} bytes used")
+            Text("${capacity.remainingBytes.coerceAtLeast(0)} bytes remaining")
         }
 
         SectionCard(title = "Diagnostics") {
-            Text("Le log de diagnostic Android est stocké dans ${MainActivity.DIAGNOSTIC_LOG_FILE_NAME}.")
-            Text("Le vrai push matériel reste manuel, sans readback automatique après l’écriture.")
+            Text("The Android diagnostic log is stored in ${MainActivity.DIAGNOSTIC_LOG_FILE_NAME}.")
+            Text("Real hardware pushes remain manual, with no automatic readback after writing.")
         }
     }
 }
@@ -978,19 +992,19 @@ private fun DebugLabScreen(
     ) {
         HeroCard(
             title = "Debug & Lab",
-            subtitle = "Zone séparée pour transports de test, Speculos et diagnostic de cible.",
+            subtitle = "Separate area for test transports, Speculos, and target diagnostics.",
         ) {
-            Text("L’interface normale n’expose plus ces réglages directement.")
+            Text("The normal interface no longer exposes these settings directly.")
         }
 
-        SectionCard(title = "Transport actif", subtitle = syncUiState.deviceName ?: "Aucune cible") {
+        SectionCard(title = "Active transport", subtitle = syncUiState.deviceName ?: "No target") {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     modifier = Modifier.weight(1f).testTag(UiTags.SyncTransportUsb),
                     onClick = { onTransportModeChanged(SyncTransportMode.Usb) },
                     enabled = transportMode != SyncTransportMode.Usb,
                 ) {
-                    Text("USB réel")
+                    Text("Real USB")
                 }
                 OutlinedButton(
                     modifier = Modifier.weight(1f).testTag(UiTags.SyncTransportSpeculos),
@@ -1006,7 +1020,7 @@ private fun DebugLabScreen(
                     value = speculosHost,
                     onValueChange = onSpeculosHostChanged,
                     modifier = Modifier.fillMaxWidth().testTag(UiTags.SyncSpeculosHost),
-                    label = { Text("Host Speculos") },
+                    label = { Text("Speculos host") },
                     singleLine = true,
                 )
                 Spacer(Modifier.height(10.dp))
@@ -1014,28 +1028,28 @@ private fun DebugLabScreen(
                     value = speculosPortText,
                     onValueChange = onSpeculosPortChanged,
                     modifier = Modifier.fillMaxWidth().testTag(UiTags.SyncSpeculosPort),
-                    label = { Text("Port APDU Speculos") },
+                    label = { Text("Speculos APDU port") },
                     singleLine = true,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Sur l’émulateur Android, 10.0.2.2 pointe vers le PC hôte.",
+                    "On the Android emulator, 10.0.2.2 points to the host PC.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
 
-        SectionCard(title = "Actions debug") {
+        SectionCard(title = "Debug actions") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Override dangereux hardware-safe", fontWeight = FontWeight.Medium)
+                    Text("Dangerous hardware-safe override", fontWeight = FontWeight.Medium)
                     Text(
-                        "Permet de forcer un push matériel même si la policy de sécurité le bloquerait normalement.",
+                        "Allows forcing a hardware push even if the safety policy would normally block it.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1043,9 +1057,9 @@ private fun DebugLabScreen(
                 Switch(checked = dangerousOverrideEnabled, onCheckedChange = onDangerousOverrideChanged)
             }
             Spacer(Modifier.height(10.dp))
-            ActionButton("Rafraîchir la cible", Icons.Rounded.CloudSync, onRefreshDevice)
+            ActionButton("Refresh target", Icons.Rounded.CloudSync, onRefreshDevice)
             Spacer(Modifier.height(10.dp))
-            ActionButton("Ouvrir l’écran de sync", Icons.Rounded.Verified, onOpenSync)
+            ActionButton("Open sync screen", Icons.Rounded.Verified, onOpenSync)
         }
     }
 }
@@ -1088,9 +1102,10 @@ private fun HeroCard(
 private fun SectionCard(
     title: String,
     subtitle: String? = null,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier =
                 Modifier
@@ -1138,7 +1153,7 @@ private fun CompactEntryRow(
             },
             trailingContent = {
                 IconButton(onClick = onCopy) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "Copier ${entry.nickname}")
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy ${entry.nickname}")
                 }
             },
         )
@@ -1202,10 +1217,10 @@ private fun StatPill(label: String) {
 private fun AppPanel.title(): String =
     when (this) {
         AppPanel.Home -> "Ledger Companion"
-        AppPanel.Editor -> "Édition locale"
-        AppPanel.Sync -> "Synchronisation"
-        AppPanel.Settings -> "Réglages"
-        AppPanel.About -> "À propos"
+        AppPanel.Editor -> "Local editing"
+        AppPanel.Sync -> "Sync"
+        AppPanel.Settings -> "Settings"
+        AppPanel.About -> "About"
         AppPanel.Debug -> "Debug"
     }
 
@@ -1225,15 +1240,15 @@ private fun buildDraftVault(localVault: Vault, state: EntryEditorState): Vault? 
     return Vault(entries = nextEntries.sortedBy { it.nickname.lowercase() }, source = localVault.source)
 }
 
-private fun CharsetFlag.frenchLabel(): String =
+private fun CharsetFlag.displayLabel(): String =
     when (this) {
-        CharsetFlag.UPPERCASE -> "Majuscules"
-        CharsetFlag.LOWERCASE -> "Minuscules"
-        CharsetFlag.NUMBERS -> "Chiffres"
-        CharsetFlag.MINUS -> "Tiret"
+        CharsetFlag.UPPERCASE -> "Uppercase"
+        CharsetFlag.LOWERCASE -> "Lowercase"
+        CharsetFlag.NUMBERS -> "Numbers"
+        CharsetFlag.MINUS -> "Hyphen"
         CharsetFlag.UNDERLINE -> "Underscore"
-        CharsetFlag.SPACE -> "Espace"
-        CharsetFlag.SPECIAL -> "Spéciaux"
+        CharsetFlag.SPACE -> "Space"
+        CharsetFlag.SPECIAL -> "Specials"
         CharsetFlag.BRACKETS -> "Brackets"
     }
 

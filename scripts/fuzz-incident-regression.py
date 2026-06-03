@@ -52,7 +52,7 @@ class IncidentCase:
 CASES: tuple[IncidentCase, ...] = (
     IncidentCase(
         case_id="sofian_push_show_control",
-        note="Contrôle minimal du flux incident: push puis show sur un seul identifiant",
+        note="Minimal control of the incident flow: push then show on a single identifier",
         plan="push_show",
         entries=(SeedEntry("sofian terki"),),
         position=1,
@@ -61,7 +61,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="sofian_push_verify_show_control",
-        note="Même flux mais avec verify séparé avant le show",
+        note="Same flow but with separate verify before show",
         plan="push_verify_show",
         entries=(SeedEntry("sofian terki"),),
         position=1,
@@ -70,7 +70,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="sofian_push_restart_show_first",
-        note="Push de sofian terki, restart Speculos, puis show du premier item",
+        note="Push sofian terki, restart Speculos, then show the first item",
         plan="push_restart_show",
         entries=(SeedEntry("sofian terki"),),
         position=1,
@@ -79,7 +79,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="leading_space_push_type_repeat3",
-        note="Seed flaky historique rejoué 3 fois sur push -> type",
+        note="Historical flaky seed replayed 3 times on push -> type",
         plan="push_type_repeat",
         entries=(SeedEntry(" leading"),),
         position=1,
@@ -88,7 +88,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="alpha_beta_push_show_second",
-        note="Deux entrées valides, push puis show du second item",
+        note="Two valid entries, push then show the second item",
         plan="push_show",
         entries=(SeedEntry("alpha"), SeedEntry("beta")),
         position=2,
@@ -97,7 +97,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="alpha_beta_push_verify_show_second",
-        note="Deux entrées valides, verify séparé, puis show du second item",
+        note="Two valid entries, separate verify, then show the second item",
         plan="push_verify_show",
         entries=(SeedEntry("alpha"), SeedEntry("beta")),
         position=2,
@@ -106,7 +106,7 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="second_len_plus1_show_second",
-        note="Raw corrompu accepté, puis show du second item",
+        note="Accepted corrupted raw, then show the second item",
         plan="raw_show",
         entries=(SeedEntry("github"), SeedEntry("gmail")),
         position=2,
@@ -116,13 +116,37 @@ CASES: tuple[IncidentCase, ...] = (
     ),
     IncidentCase(
         case_id="second_len_plus1_restart_show_second",
-        note="Raw corrompu accepté, restart Speculos, puis show du second item",
+        note="Accepted corrupted raw, restart Speculos, then show the second item",
         plan="raw_restart_show",
         entries=(SeedEntry("github"), SeedEntry("gmail")),
         position=2,
         expected_selected_nickname="gmail\x00",
         expected_pull_nicknames=("github", "gmail\x00"),
         mutation="second_len_plus1",
+    ),
+    IncidentCase(
+        case_id="ui_only_sofian_show_control",
+        note="UI-only creation of a single identifier, then show the first item",
+        plan="ui_create_show",
+        entries=(SeedEntry("sofian terki"),),
+        position=1,
+        expected_selected_nickname="sofian terki",
+    ),
+    IncidentCase(
+        case_id="ui_only_sofian_abc_type_show_second",
+        note="UI-only creation of two identifiers, type the second then show the second item",
+        plan="ui_create_type_show",
+        entries=(SeedEntry("sofian terki"), SeedEntry("abc")),
+        position=2,
+        expected_selected_nickname="abc",
+    ),
+    IncidentCase(
+        case_id="ui_only_a_b_type_show_second",
+        note="Minimal UI-only creation of two identifiers, type then show the second item",
+        plan="ui_create_type_show",
+        entries=(SeedEntry("a"), SeedEntry("b")),
+        position=2,
+        expected_selected_nickname="b",
     ),
 )
 
@@ -254,6 +278,36 @@ def run_single_flow(
     harness.start()
     try:
         harness.initialize_first_run()
+        if case.plan == "ui_create_show":
+            created = []
+            for entry in case.entries:
+                created.append({"nickname": entry.nickname, "screen_text": harness.create_password(entry.nickname)})
+            list_screen = harness.show_password_list()
+            screen_text = harness.show_password(position=case.position)
+            selected = check_selected(case, screen_text)
+            return {
+                "setup": {"action": "ui_create", "created": created, "list_screen": list_screen},
+                "post_action": "show",
+                "screen_text": screen_text,
+                "selected_nickname": selected,
+            }
+
+        if case.plan == "ui_create_type_show":
+            created = []
+            for entry in case.entries:
+                created.append({"nickname": entry.nickname, "screen_text": harness.create_password(entry.nickname)})
+            list_screen = harness.show_password_list()
+            type_screen = harness.type_password(position=case.position)
+            screen_text = harness.show_password(position=case.position)
+            selected = check_selected(case, screen_text)
+            return {
+                "setup": {"action": "ui_create", "created": created, "list_screen": list_screen},
+                "post_action": "show",
+                "type_screen": type_screen,
+                "screen_text": screen_text,
+                "selected_nickname": selected,
+            }
+
         if mutated_raw is None:
             push = harness.push_backup(seed_backup)
             setup = {"action": "push", "stdout": push.stdout.strip()}
@@ -508,7 +562,7 @@ def run_case(
         display=display,
     )
     try:
-        if case.plan in {"push_show", "push_verify_show", "raw_show"}:
+        if case.plan in {"push_show", "push_verify_show", "raw_show", "ui_create_show", "ui_create_type_show"}:
             result = run_single_flow(
                 case=case,
                 harness=harness,

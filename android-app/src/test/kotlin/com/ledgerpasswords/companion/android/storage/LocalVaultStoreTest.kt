@@ -26,7 +26,7 @@ class LocalVaultStoreTest {
         assertNotNull(result.vault)
         assertEquals(VaultSource.Local, result.vault?.source)
         assertTrue(result.vault?.entries?.isEmpty() == true)
-        assertEquals("Vault local vide. Ajoute un identifiant ou importe depuis Ledger.", result.message)
+        assertEquals("Local vault is empty. Add an identifier or import from Ledger.", result.message)
         assertNull(result.backupJsonText)
     }
 
@@ -91,7 +91,7 @@ class LocalVaultStoreTest {
 
         assertNotNull(result.vault)
         assertEquals(emptyList<String>(), result.vault?.entries?.map { it.nickname })
-        assertTrue(result.message.contains("stockage local était invalide"))
+        assertTrue(result.message.contains("Local storage was invalid"))
         assertNull(result.backupJsonText)
         assertEquals(1, corruptCopies.size)
         assertEquals("{ this is not valid json", corruptCopies.single().readText())
@@ -106,6 +106,6 @@ class LocalVaultStoreTest {
 
         assertNull(result.vault)
         assertNull(result.backupJsonText)
-        assertTrue(result.message.contains("Impossible de lire"))
+        assertTrue(result.message.contains("Unable to read"))
     }
 }

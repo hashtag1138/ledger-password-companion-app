@@ -1,30 +1,30 @@
-# Architecture et étude du code source
+# Architecture and Source Code Study
 
-## Vue d'ensemble
+## Overview
 
-Le repo est organisé pour séparer :
+The repository is organized to separate:
 
-- la logique métier pure ;
-- le protocole Ledger Passwords ;
-- les outils de test et de ligne de commande ;
-- l'intégration Android.
+- pure business logic;
+- the Ledger Passwords protocol;
+- testing and command-line tools;
+- Android integration.
 
 ```text
-core/             logique métier pure
-ledger-protocol/  codec metadata, backups, APDU, transports
-cli/              banc de test PC et automation simple
-android-app/      UI Compose, stockage local, sync Android
-scripts/          helpers Speculos, smoke tests, fuzzers
-docs/             design, sécurité, findings, plans
+core/             pure business logic
+ledger-protocol/  metadata codec, backups, APDU, transports
+cli/              PC test bench and simple automation
+android-app/      Compose UI, local storage, Android sync
+scripts/          Speculos helpers, smoke tests, fuzzers
+docs/             design, security, findings, plans
 ```
 
-## Responsabilités par module
+## Responsibilities by Module
 
 ### `core`
 
-Code à lire en premier si tu veux comprendre les règles produit.
+Read this first if you want to understand product rules.
 
-Contient notamment :
+It notably contains:
 
 - [Vault.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/model/Vault.kt:1)
 - [PasswordIdentifier.kt](/home/sofian/Sources/ledger-passwords-companion/core/src/main/kotlin/com/ledgerpasswords/companion/core/model/PasswordIdentifier.kt:1)
@@ -35,9 +35,9 @@ Contient notamment :
 
 ### `ledger-protocol`
 
-Code à lire ensuite pour comprendre le format et le transport.
+Read this next to understand the format and transport.
 
-Fichiers clés :
+Key files:
 
 - [MetadataCodec.kt](/home/sofian/Sources/ledger-passwords-companion/ledger-protocol/src/main/kotlin/com/ledgerpasswords/companion/ledger/metadata/MetadataCodec.kt:1)
 - [BackupJsonCodec.kt](/home/sofian/Sources/ledger-passwords-companion/ledger-protocol/src/main/kotlin/com/ledgerpasswords/companion/ledger/backup/BackupJsonCodec.kt:1)
@@ -48,97 +48,97 @@ Fichiers clés :
 
 ### `cli`
 
-Le point d'entrée est [Main.kt](/home/sofian/Sources/ledger-passwords-companion/cli/src/main/kotlin/com/ledgerpasswords/companion/cli/Main.kt:1).
+The entry point is [Main.kt](/home/sofian/Sources/ledger-passwords-companion/cli/src/main/kotlin/com/ledgerpasswords/companion/cli/Main.kt:1).
 
-Le module sert à :
+This module is used to:
 
-- valider les codecs hors Android ;
-- piloter Speculos ;
-- piloter un vrai Ledger sur PC ;
-- servir de base aux campagnes de fuzz.
+- validate codecs outside Android;
+- drive Speculos;
+- drive a real Ledger from a PC;
+- serve as a base for fuzzing campaigns.
 
 ### `android-app`
 
-Le point d'entrée runtime est [MainActivity.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/MainActivity.kt:1).
+The runtime entry point is [MainActivity.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/MainActivity.kt:1).
 
-Répartition actuelle :
+Current split:
 
-- [AppShell.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/AppShell.kt:1) : UI Compose
-- [SyncUiLogic.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/SyncUiLogic.kt:1) : réduction d'état et rendu du diff
-- [LocalVaultStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/LocalVaultStore.kt:1) : persistance locale
-- [DiagnosticLogStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/DiagnosticLogStore.kt:1) : logs persistants
-- [AndroidUsbLedgerTransport.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/usb/AndroidUsbLedgerTransport.kt:1) : intégration USB Android
+- [AppShell.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/AppShell.kt:1): Compose UI
+- [SyncUiLogic.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/SyncUiLogic.kt:1): state reduction and diff rendering
+- [LocalVaultStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/LocalVaultStore.kt:1): local persistence
+- [DiagnosticLogStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/DiagnosticLogStore.kt:1): persistent logs
+- [AndroidUsbLedgerTransport.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/usb/AndroidUsbLedgerTransport.kt:1): Android USB integration
 
-## Flows runtime principaux
+## Main Runtime Flows
 
-### Édition locale
+### Local Editing
 
-`AppShell` collecte l'intention utilisateur, `MainActivity` construit un nouveau `Vault`, puis le sauvegarde via `LocalVaultStore`.
+`AppShell` collects user intent, `MainActivity` builds a new `Vault`, then saves it through `LocalVaultStore`.
 
-### Import/export JSON
+### JSON Import/Export
 
-Le fichier passe par `BackupJsonCodec`, puis :
+The file goes through `BackupJsonCodec`, then:
 
-- validation stricte dans `core` ;
-- conservation du raw si possible ;
-- blocage ultérieur éventuel par la policy hardware-safe si le raw est suspect.
+- strict validation in `core`;
+- raw preservation when possible;
+- possible later blocking by the hardware-safe policy if the raw backup is suspicious.
 
-### Sync réelle Ledger
+### Real Ledger Sync
 
-Chaîne de lecture :
+Read chain:
 
 `MainActivity` -> `AndroidUsbLedgerTransport` -> `LedgerPasswordsClient` -> `MetadataCodec`
 
-Chaîne d'écriture :
+Write chain:
 
 `MainActivity` -> `LedgerPushRiskPolicy` -> `LedgerPasswordsClient.loadMetadatas()`
 
-### Sync Speculos
+### Speculos Sync
 
-Le flow est le même que pour un vrai Ledger, sauf que le transport est `SpeculosTransport` et que la policy est moins stricte.
+The flow is the same as for a real Ledger, except the transport is `SpeculosTransport` and the policy is less strict.
 
-## Ordre recommandé pour étudier le code
+## Recommended Order for Studying the Code
 
-1. Lire [README.md](../../README.md) et [TECHNICAL_CHOICES.md](../../TECHNICAL_CHOICES.md).
-2. Lire les modèles et validateurs dans `core`.
-3. Lire `MetadataCodec` et `BackupJsonCodec`.
-4. Lire `LedgerPasswordsClient` et les transports.
-5. Lire `Main.kt` côté CLI pour les scénarios minimaux.
-6. Lire `MainActivity` puis `AppShell` côté Android.
-7. Lire les tests correspondants avant de modifier une zone.
+1. Read [README.md](../../README.md) and [TECHNICAL_CHOICES.md](../../TECHNICAL_CHOICES.md).
+2. Read the models and validators in `core`.
+3. Read `MetadataCodec` and `BackupJsonCodec`.
+4. Read `LedgerPasswordsClient` and the transports.
+5. Read `Main.kt` on the CLI side for minimal scenarios.
+6. Read `MainActivity` and then `AppShell` on the Android side.
+7. Read the corresponding tests before modifying an area.
 
-## Ordre recommandé pour déboguer
+## Recommended Order for Debugging
 
-### Bug métier
+### Business Logic Bug
 
-Commencer par `core`, puis `ledger-protocol`.
+Start with `core`, then `ledger-protocol`.
 
-### Bug de sync
+### Sync Bug
 
-Commencer par :
+Start with:
 
 - `LedgerPasswordsClient`
-- le transport concerné
+- the relevant transport
 - `MainActivity`
 
-### Bug UI Android
+### Android UI Bug
 
-Commencer par :
+Start with:
 
 - `AppShell`
 - `SyncUiLogic`
 - `MainActivity`
 
-### Bug de risque / blocage avant push
+### Risk / Pre-Push Blocking Bug
 
-Commencer par :
+Start with:
 
 - `VaultValidator`
 - `NicknameSafety`
 - `LedgerPushRiskPolicy`
 
-## Références liées
+## Related References
 
-- [Protocole Ledger Passwords](../ledger-passwords-protocol.md)
-- [Flows de synchronisation](../sync-flows.md)
-- [Plan de mitigation côté companion](../companion-mitigation-plan.md)
+- [Ledger Passwords protocol](../ledger-passwords-protocol.md)
+- [Synchronization flows](../sync-flows.md)
+- [Companion-side mitigation plan](../companion-mitigation-plan.md)

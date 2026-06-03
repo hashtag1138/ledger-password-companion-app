@@ -1,20 +1,20 @@
-# ADR 0001 — Séparation stricte des modules
+# ADR 0001 - Strict Module Separation
 
-## Statut
+## Status
 
-Accepté.
+Accepted.
 
-## Décision
+## Decision
 
-Le projet garde quatre modules principaux :
+The project keeps four main modules:
 
-- `core` : métier pur ;
-- `ledger-protocol` : codec + APDU ;
-- `cli` : outil PC ;
-- `android-app` : UI et intégration Android.
+- `core`: pure business logic;
+- `ledger-protocol`: codec + APDU;
+- `cli`: PC tool;
+- `android-app`: UI and Android integration.
 
-## Conséquences
+## Consequences
 
-- Les tests de codec et métier tournent sans Android.
-- Le transport Ledger peut être fake, PC, Speculos ou Android sans modifier le métier.
-- L'app Android reste un frontend et ne devient pas la source de vérité cryptographique.
+- Codec and business-logic tests run without Android.
+- Ledger transport can be fake, PC, Speculos, or Android without changing business logic.
+- The Android app remains a frontend and does not become the source of cryptographic truth.

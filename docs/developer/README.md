@@ -1,34 +1,34 @@
-# Documentation développeur
+# Developer Documentation
 
-Cette section est destinée à l'étude du code, aux tests et à l'investigation.
+This section is intended for code study, testing, and investigation.
 
-## Lire dans cet ordre
+## Read in This Order
 
-1. [Architecture et étude du code source](./architecture.md)
-2. [Builds et tests](./testing.md)
-3. [Fuzzing et campagnes Speculos](./fuzzing.md)
+1. [Architecture and source code study](./architecture.md)
+2. [Builds and tests](./testing.md)
+3. [Fuzzing and Speculos campaigns](./fuzzing.md)
 
-## Références techniques existantes
+## Existing Technical References
 
 - [TECHNICAL_CHOICES.md](../../TECHNICAL_CHOICES.md)
-- [Protocole Ledger Passwords](../ledger-passwords-protocol.md)
-- [Flows de synchronisation](../sync-flows.md)
-- [Sécurité produit](../security.md)
+- [Ledger Passwords protocol](../ledger-passwords-protocol.md)
+- [Synchronization flows](../sync-flows.md)
+- [Product security](../security.md)
 - [ADR 0001](../adr/0001-module-boundaries.md)
 - [ADR 0002](../adr/0002-no-password-generation-on-phone.md)
 
-## Références d'investigation
+## Investigation References
 
-- [Rapport de findings fuzzing](../fuzzing-findings-report.md)
-- [Plan de mitigation côté companion](../companion-mitigation-plan.md)
-- [Tracker détaillé de fuzzing](../fuzzing-tracker.md)
-- [Mode d'emploi Speculos](../speculos-testing.md)
+- [Fuzzing findings report](../fuzzing-findings-report.md)
+- [Companion-side mitigation plan](../companion-mitigation-plan.md)
+- [Detailed fuzzing tracker](../fuzzing-tracker.md)
+- [Speculos guide](../speculos-testing.md)
 
-## Intentions de cette doc
+## Goals of This Documentation
 
-Elle doit permettre à un nouveau contributeur de :
+It should allow a new contributor to:
 
-- comprendre comment le repo est structuré ;
-- savoir où lire le code en premier ;
-- reproduire la baseline de tests ;
-- relancer les campagnes fuzz sans repartir de zéro.
+- understand how the repository is structured;
+- know where to read the code first;
+- reproduce the test baseline;
+- rerun fuzz campaigns without starting from scratch.

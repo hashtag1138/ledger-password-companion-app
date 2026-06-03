@@ -1,36 +1,36 @@
-# Documentation utilisateur
+# User Documentation
 
-Cette section est destinée à l'usage normal du companion, surtout l'app Android.
+This section is intended for normal companion usage, especially the Android app.
 
-## Commencer ici
+## Start Here
 
-- [Utiliser l'app Android](./android-app.md)
-- [Sécurité, limites et garde-fous](./safety-and-limits.md)
+- [Use the Android app](./android-app.md)
+- [Safety, limits, and guardrails](./safety-and-limits.md)
 
-## Ce que fait le companion
+## What the Companion Does
 
-- gérer localement la liste des identifiants/nicknames Ledger Passwords ;
-- importer et exporter un `backup.json` compatible ;
-- comparer l'état local et l'état du Ledger ;
-- pousser un bloc metadata vers le Ledger après confirmation explicite.
+- manage the list of Ledger Passwords identifiers/nicknames locally;
+- import and export a compatible `backup.json`;
+- compare local state and Ledger state;
+- push a metadata block to the Ledger after explicit confirmation.
 
-## Ce que le companion ne fait pas
+## What the Companion Does Not Do
 
-- il ne demande jamais la recovery phrase ;
-- il ne génère pas les mots de passe finaux ;
-- il ne remplace pas l'app Passwords sur le Ledger ;
-- il n'exécute pas de synchronisation automatique vers un service réseau.
+- it never asks for the recovery phrase;
+- it does not generate final passwords;
+- it does not replace the Passwords app on the Ledger;
+- it does not run automatic sync to a network service.
 
-## Parcours recommandé
+## Recommended Path
 
-1. Préparer ou éditer les identifiants localement dans l'app.
-2. Exporter un `backup.json` si tu veux une copie fichier.
-3. Brancher le Ledger, ouvrir l'app `Passwords`, puis utiliser `Comparer`.
-4. Si le diff est correct, utiliser `Exporter vers Ledger`.
-5. Lancer `Vérifier` séparément après l'écriture.
+1. Prepare or edit identifiers locally in the app.
+2. Export a `backup.json` if you want a file copy.
+3. Connect the Ledger, open the `Passwords` app, then use `Compare`.
+4. If the diff is correct, use `Export to Ledger`.
+5. Run `Verify` separately after writing.
 
-## À propos de Debug
+## About Debug
 
-Le menu `Debug` existe pour les tests et l'investigation technique. Un utilisateur normal n'en a pas besoin au quotidien.
+The `Debug` menu exists for testing and technical investigation. A normal user does not need it day to day.
 
-Si tu veux comprendre l'architecture, reproduire les tests ou utiliser Speculos, passe à la [documentation développeur](../developer/README.md).
+If you want to understand the architecture, reproduce tests, or use Speculos, go to the [developer documentation](../developer/README.md).

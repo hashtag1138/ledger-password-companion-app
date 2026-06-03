@@ -24,15 +24,15 @@ class SpeculosSyncTest {
 
         scrollToSyncAction(UiTags.SyncPull)
         composeRule.onNodeWithTag(UiTags.SyncPull).performClick()
-        waitForStatus("Import terminé depuis Speculos.")
+        waitForStatus("Import completed from the test target.")
 
         scrollToSyncAction(UiTags.SyncPush)
         composeRule.onNodeWithTag(UiTags.SyncPush).performClick()
-        waitForStatus("Push envoyé vers Speculos.")
+        waitForStatus("Push sent to Speculos.")
 
         scrollToSyncAction(UiTags.SyncVerify)
         composeRule.onNodeWithTag(UiTags.SyncVerify).performClick()
-        waitForStatus("Le Ledger correspond à l'état local.")
+        waitForStatus("Ledger matches the local state.")
     }
 
     private fun openSyncIfNeeded() {
@@ -59,7 +59,7 @@ class SpeculosSyncTest {
     }
 
     private fun connectToSpeculos() {
-        waitForStatus("Speculos connecté, app Passwords")
+        waitForStatus("Speculos connected, Passwords app")
     }
 
     private fun scrollToSyncAction(tag: String) {
@@ -67,7 +67,13 @@ class SpeculosSyncTest {
             .performScrollToNode(hasTestTag(tag))
     }
 
+    private fun scrollToSyncStatus() {
+        composeRule.onNodeWithTag(UiTags.SyncScroll)
+            .performScrollToNode(hasTestTag(UiTags.SyncStatusMessage))
+    }
+
     private fun waitForStatus(expectedSubstring: String, timeoutMillis: Long = 60_000L) {
+        scrollToSyncStatus()
         composeRule.waitUntil(timeoutMillis) {
             try {
                 composeRule.onNodeWithTag(UiTags.SyncStatusMessage)
@@ -77,6 +83,7 @@ class SpeculosSyncTest {
                 false
             }
         }
+        scrollToSyncStatus()
         composeRule.onNodeWithTag(UiTags.SyncStatusMessage)
             .assertTextContains(expectedSubstring, substring = true)
     }
