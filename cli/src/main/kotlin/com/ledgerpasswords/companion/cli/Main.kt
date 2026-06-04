@@ -225,10 +225,7 @@ class LedgerPwCli {
         validator.validate(vault).throwIfInvalid()
         val info = client.getAppInfo()
         if (args.hasFlag("--hid") && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
-            error(
-                "Real-device push is blocked for Passwords ${info.version}. " +
-                    "Update the Ledger app to 1.3.1 or newer before writing real hardware.",
-            )
+            error(LedgerAppCompatibility.realDeviceWriteBlockedMessage(info.version))
         }
         val config = client.getAppConfig()
         val mode = if (args.hasFlag("--hid")) PushSafetyMode.HardwareSafe else PushSafetyMode.Standard

@@ -27,9 +27,11 @@ adb shell am start -n com.ledgerpasswords.companion/com.ledgerpasswords.companio
 From the main screen:
 
 - on first launch, a warning reminds you that the app remains experimental; it can be hidden for the future and re-enabled in `Settings`;
-- the local list shows the identifiers already stored on the phone;
+- the local vault card shows the identifiers stored on the phone, `Last sync`, and whether local changes are waiting to be synchronized;
+- the main action opens `Sync`; if local changes exist since the last successful sync, the button becomes `Synchronize now`;
 - tapping a row opens editing;
 - the copy icon quickly copies the nickname;
+- identifiers added locally since the last successful sync are highlighted with `New locally`;
 - the `…` menu provides access to `Settings`, `About`, and `Debug`.
 
 ## Manage Identifiers
@@ -49,6 +51,8 @@ Important:
 
 Local deletion now requires explicit confirmation.
 
+Entries added locally remain marked as new until a successful synchronization updates the sync shadow.
+
 ## Import or Export a `backup.json`
 
 From the main screen:
@@ -58,31 +62,32 @@ From the main screen:
 
 When possible, the companion preserves the exact `raw_metadatas` from the backup, but it may later block a real `push` if the file contains anomalies considered dangerous.
 
-## Sync with a Real Ledger
+## Synchronize with a Real Ledger
 
 Prerequisites:
 
 - Ledger connected to the phone through USB OTG;
 - `Passwords` app open on the Ledger;
 - USB permission granted to the Android app;
-- `Passwords >= 1.3.1` to allow a real `push`.
+- `Passwords >= 1.3.2` to allow a real `push`.
 
 Recommended workflow:
 
 1. Open `Sync`.
-2. Use `Refresh` if needed.
-3. Use `Import from Ledger` to re-read device state.
-4. Use `Compare local with target`.
-5. Use `Export local to Ledger` only if the diff is fully understood.
-6. Use `Verify final consistency` after writing.
+2. Tap `Synchronize local and target`.
+3. Approve the initial read on the Ledger so the app can compare local and device state.
+4. If the app detects a real conflict, choose `Keep local` or `Keep target`.
+5. Approve the write on the Ledger.
+6. Approve the final verification read on the Ledger.
+7. Wait for the final success dialog, then return home and confirm that `Last sync` was updated.
 
-The sync screen now separates reading from writing, shows the diff above write actions, and auto-scrolls to it after comparison or verification.
+If local and Ledger state can be merged automatically, the whole flow is one guided sequence. The sync screen only keeps two sections: `Synchronize` and `Current state`.
 
-Real `push` and `verify` intentionally stay separate. The app does not automatically trigger a read after writing, but it proposes `Verify now` right after a successful export.
+`Current state` remains useful for status, the last diff summary, USB permission, and a manual `Refresh target state` when needed.
 
-## Block Messages Before Push
+## Safety Blocks Before Writing
 
-The companion may refuse a real `push` if local state presents too much risk, for example:
+The companion may stop a real sync before writing if the merged state presents too much risk, for example:
 
 - dangerous invisible characters;
 - control characters;
@@ -90,9 +95,7 @@ The companion may refuse a real `push` if local state presents too much risk, fo
 - inconsistent raw `backup.json`;
 - required safety override.
 
-In that case, read the summary shown in the confirmation popup or in the sync message.
-
-The `push` confirmation popup also reminds you of the last known diff when available.
+In that case, read the summary shown in `Current state` or in the final stop dialog.
 
 ## Use Speculos on an Emulator
 
@@ -101,8 +104,10 @@ The `push` confirmation popup also reminds you of the last known diff when avail
 For manual use:
 
 1. Start Speculos on the PC.
-2. Open `Sync`.
+2. Open `Debug`.
 3. Choose `Speculos`.
 4. Keep `10.0.2.2` as the host and `10100` as the port if you use the repo default configuration.
+5. Use `Refresh target` if you want to confirm connectivity first.
+6. Open `Sync` and use `Synchronize local and target`.
 
 For more details, see the [developer testing documentation](../developer/testing.md).

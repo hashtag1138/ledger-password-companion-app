@@ -969,7 +969,7 @@ class MainActivity : ComponentActivity() {
                 val config = client.getAppConfig()
                 val compatibilityNotice =
                     if (target is SyncTarget.Usb && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
-                        " Read-only is recommended until the Passwords app is updated to ${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}+."
+                        LedgerAppCompatibility.realDeviceReadOnlyNotice()
                     } else {
                         ""
                     }
@@ -1414,9 +1414,7 @@ class MainActivity : ComponentActivity() {
             if (target is SyncTarget.Usb && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.ValidationError,
-                    statusMessage =
-                        "Hardware sync blocked: Passwords app ${info.version} is older than " +
-                            "${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}. Update the app on the Ledger before any real write.",
+                    statusMessage = LedgerAppCompatibility.realDeviceWriteBlockedMessage(info.version),
                     appName = info.name,
                     appVersion = info.version,
                     showVerifyCallToAction = false,
@@ -1582,10 +1580,7 @@ class MainActivity : ComponentActivity() {
             if (target is SyncTarget.Usb && !LedgerAppCompatibility.supportsRealDevicePush(info.version)) {
                 return@performLedgerAction SyncUpdate(
                     status = SyncStatus.ValidationError,
-                    statusMessage =
-                        "Hardware push blocked: Passwords app ${info.version} is older than " +
-                            "${MIN_SAFE_REAL_DEVICE_VERSION_LABEL}. Update the app on the Ledger " +
-                            "before any real write.",
+                    statusMessage = LedgerAppCompatibility.realDeviceWriteBlockedMessage(info.version),
                     appName = info.name,
                     appVersion = info.version,
                     clearDeviceEntries = true,
@@ -2020,7 +2015,6 @@ class MainActivity : ComponentActivity() {
         private const val ACTION_USB_PERMISSION = "com.ledgerpasswords.companion.USB_PERMISSION"
         private const val LEDGER_VENDOR_ID = 0x2C97
         private const val EXPECTED_APP_NAME = "Passwords"
-        private const val MIN_SAFE_REAL_DEVICE_VERSION_LABEL = "1.3.1"
         private const val LOCAL_VAULT_FILE_NAME = "local-vault.json"
         private const val SYNC_SHADOW_FILE_NAME = "sync-shadow.properties"
         private const val UI_PREFERENCES_FILE_NAME = "ui-preferences.properties"

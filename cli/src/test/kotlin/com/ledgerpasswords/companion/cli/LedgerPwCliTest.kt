@@ -116,7 +116,7 @@ class LedgerPwCliTest {
         val workdir = Files.createTempDirectory("ledger-pw-cli-test")
         val outputFile = workdir.resolve("pulled.json")
         val raw = metadataCodec.encode(Vault(entries = listOf(PasswordIdentifier("github"), PasswordIdentifier("gmail"))))
-        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(initialMetadatas = raw))
+        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.1", initialMetadatas = raw))
 
         val output =
             captureStdout {
@@ -150,19 +150,24 @@ class LedgerPwCliTest {
     }
 
     @Test
-    fun `device push over hid is blocked for older passwords versions`() {
+    fun `device push over hid is blocked for passwords 1 3 1 and explains why`() {
         val workdir = Files.createTempDirectory("ledger-pw-cli-test")
         val input = workdir.resolve("backup.json")
         input.writeText(codec.toJson(Vault(entries = listOf(PasswordIdentifier("github")))))
-        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.0"))
+        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.1"))
 
         val error =
             assertThrows(IllegalStateException::class.java) {
                 cli.run(listOf("device", "push", input.toString(), "--hid"))
             }
 
-        assertTrue(error.message!!.contains("blocked"))
-        assertTrue(error.message!!.contains("1.3.0"))
+        assertTrue(error.message!!.contains("Real-device write refused"))
+        assertTrue(error.message!!.contains("1.3.1"))
+        assertTrue(error.message!!.contains("1.3.2"))
+        assertTrue(error.message!!.contains("wrong index handling"))
+        assertTrue(error.message!!.contains("AZERTY AltGr"))
+        assertTrue(error.message!!.contains("pull/dump remain allowed"))
+        assertTrue(error.message!!.contains("https://github.com/hashtag1138/ledger-passwords-show-second-repro"))
     }
 
     @Test
@@ -170,7 +175,7 @@ class LedgerPwCliTest {
         val workdir = Files.createTempDirectory("ledger-pw-cli-test")
         val input = workdir.resolve("backup.json")
         input.writeText(codec.toJson(Vault(entries = listOf(PasswordIdentifier(" leading")))))
-        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.1"))
+        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.2"))
 
         val error =
             assertThrows(IllegalStateException::class.java) {
@@ -182,11 +187,26 @@ class LedgerPwCliTest {
     }
 
     @Test
+    fun `device push over hid is allowed again on passwords 1 3 2`() {
+        val workdir = Files.createTempDirectory("ledger-pw-cli-test")
+        val input = workdir.resolve("backup.json")
+        input.writeText(codec.toJson(Vault(entries = listOf(PasswordIdentifier("github")))))
+        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.2"))
+
+        val output =
+            captureStdout {
+                cli.run(listOf("device", "push", input.toString(), "--hid"))
+            }
+
+        assertTrue(output.contains("Pushed 1 identifiers"))
+    }
+
+    @Test
     fun `device push over hid can continue with dangerous override`() {
         val workdir = Files.createTempDirectory("ledger-pw-cli-test")
         val input = workdir.resolve("backup.json")
         input.writeText(codec.toJson(Vault(entries = listOf(PasswordIdentifier(" leading")))))
-        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.1"))
+        val cli = LedgerPwCli().withTransport(FakeLedgerTransport(appVersion = "1.3.2"))
 
         val output =
             captureStdout {

@@ -1,8 +1,24 @@
 # Ledger Passwords Companion
 
+## Disclaimer
+
+This companion targets the original Ledger Passwords app from [`LedgerHQ/app-passwords`](https://github.com/LedgerHQ/app-passwords), but real-device testing uncovered known app-side bugs in upstream `1.3.1`, including:
+
+- wrong index handling in `Passwords list` on some second-entry flows;
+- broken `AZERTY` typing for characters that require `AltGr`;
+- misleading glyph rendering in `Show password` for some generated characters.
+
+The upstream app repository is:
+
+- https://github.com/LedgerHQ/app-passwords
+
+The patched builds, bug analysis, and patch files maintained for those issues are here:
+
+- https://github.com/hashtag1138/ledger-passwords-show-second-repro
+
 Repository scaffold for an Android companion app for the Ledger password manager [`LedgerHQ/app-passwords`](https://github.com/LedgerHQ/app-passwords).
 
-The goal of the project is to provide a simple UI to manage the **identifiers/nicknames** used by the Ledger Passwords app, without turning the phone into a password manager. The companion app must not know the recovery phrase and must not generate or display final passwords. It only edits the metadata list, supports import/export, and then pushes the metadata block to the Ledger.
+The goal of the project is to provide a simple UI to manage the **identifiers/nicknames** used by the Ledger Passwords app, without turning the phone into a password manager. The companion app must not know the recovery phrase and must not generate or display final passwords. It edits the metadata list, supports `backup.json` import/export, and provides a guided synchronization flow with the Ledger.
 
 ## Functional Goal
 
@@ -10,8 +26,7 @@ The goal of the project is to provide a simple UI to manage the **identifiers/ni
 - Add, delete, rename, or change the character policy of an identifier.
 - Import from a JSON backup compatible with the Ledger web tool.
 - Export to a JSON backup.
-- Import from a connected Ledger.
-- Export to a connected Ledger.
+- Synchronize local state with a connected Ledger through read, merge, write, and verify steps.
 - Keep the Ledger fully usable on its own, as intended by the official app.
 
 ## Repository Architecture
@@ -39,7 +54,7 @@ The repository is no longer just a scaffold. It now contains:
 - a PC USB HID transport;
 - an offline and device CLI (`info`, `pull`, `diff`, `push`, `verify`);
 - Speculos launch and smoke-test scripts;
-- a Compose Android app with persistent local storage, local editing, `backup.json` import/export, a real USB sync flow, and a custom launcher icon;
+- a Compose Android app with persistent local storage, local editing, `backup.json` import/export, a sync shadow, a guided `Synchronize` flow, real USB support, Speculos support, and a custom launcher icon;
 - implementation-plan and technical-choice documentation.
 
 Android note:
@@ -50,9 +65,9 @@ Android note:
 What is still mainly missing on the product side:
 
 - the full analysis of the reset incident observed on a real Ledger after some `push` operations followed by device-side usage;
-- validation on a real Ledger device from Android;
-- a finer merge strategy after reading from the device;
-- a confirmation/diff screen before writing to the Ledger.
+- broader real-hardware soak coverage after repeated write and device-side use cycles;
+- more end-to-end validation around delete and update convergence across sync retries;
+- additional polish around conflict-heavy scenarios and recovery after a stale sync shadow.
 
 ## Getting Started
 
@@ -88,7 +103,7 @@ scripts/speculos-smoke.sh --api-port 5000 --first-run --auto-approve
 
 The write path must go through Speculos before any new write attempt on a real device. See [`docs/speculos-testing.md`](docs/speculos-testing.md).
 
-At the moment, the companion blocks `push` to a real Ledger if the detected Passwords app is older than `1.3.1`. Read-only actions (`refresh`, `pull`, `compare`, `verify`) remain allowed.
+At the moment, the companion blocks real writes if the detected Passwords app is older than `1.3.2`. Read-only target access remains allowed, including `pull`/`dump` against `1.3.1`.
 
 Open the Android app:
 
@@ -108,7 +123,7 @@ This script:
 - clears app data on the emulator;
 - runs Android `connectedDebugAndroidTest` against `10.0.2.2:10100`.
 
-For a manual test, the app also exposes this mode in the sync screen:
+For a manual test, install and launch the app:
 
 ```bash
 adb -s emulator-5554 install -r android-app/build/outputs/apk/debug/android-app-debug.apk
@@ -117,10 +132,12 @@ adb -s emulator-5554 shell am start -n com.ledgerpasswords.companion/com.ledgerp
 
 Then:
 
+- open `Debug`;
 - choose `Speculos`;
 - keep `10.0.2.2` as the host inside the Android emulator;
 - set the Speculos APDU port, `10100` by default in this repo;
-- use `Refresh`, then `Import`, `Compare`, `Export`, `Verify`.
+- use `Refresh target` if needed, then return to `Sync`;
+- use `Synchronize local and target` and follow the guided read/write/verify dialogs.
 
 The Android emulator does not validate real USB OTG. It is used to test the full Android flow against Speculos without touching a real Ledger.
 
@@ -158,6 +175,7 @@ The project encodes these constraints from the start:
 - [`docs/ledger-passwords-protocol.md`](docs/ledger-passwords-protocol.md): metadata format and APDU protocol.
 - [`docs/security.md`](docs/security.md): security, guardrails, and threats.
 - [`docs/sync-flows.md`](docs/sync-flows.md): pull/push/merge flows.
+- [`docs/sync-merge-roadmap.md`](docs/sync-merge-roadmap.md): current merge model and remaining sync work.
 - [`docs/ui-wireframes.md`](docs/ui-wireframes.md): wireframes and UI structure.
 - [`docs/fuzzing-findings-report.md`](docs/fuzzing-findings-report.md): fuzzing findings summary.
 - [`docs/companion-mitigation-plan.md`](docs/companion-mitigation-plan.md): companion-side mitigation plan.
