@@ -66,6 +66,7 @@ Current split:
 - [AppShell.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/AppShell.kt:1): Compose UI
 - [SyncUiLogic.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/SyncUiLogic.kt:1): state reduction and diff rendering
 - [LocalVaultStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/LocalVaultStore.kt:1): local persistence
+- [SyncShadowStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/SyncShadowStore.kt:1): last successful sync shadow
 - [DiagnosticLogStore.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/storage/DiagnosticLogStore.kt:1): persistent logs
 - [AndroidUsbLedgerTransport.kt](/home/sofian/Sources/ledger-passwords-companion/android-app/src/main/kotlin/com/ledgerpasswords/companion/android/usb/AndroidUsbLedgerTransport.kt:1): Android USB integration
 
@@ -73,7 +74,7 @@ Current split:
 
 ### Local Editing
 
-`AppShell` collects user intent, `MainActivity` builds a new `Vault`, then saves it through `LocalVaultStore`.
+`AppShell` collects user intent, `MainActivity` builds a new `Vault`, then saves it through `LocalVaultStore`. The home screen derives pending local changes and `New locally` markers by comparing `LocalVaultStore` with `SyncShadowStore`.
 
 ### JSON Import/Export
 
@@ -93,9 +94,13 @@ Write chain:
 
 `MainActivity` -> `LedgerPushRiskPolicy` -> `LedgerPasswordsClient.loadMetadatas()`
 
+The day-to-day Android flow is a guided pipeline:
+
+`read -> merge -> optional conflict resolution -> write -> verify -> persist local vault -> persist sync shadow`
+
 ### Speculos Sync
 
-The flow is the same as for a real Ledger, except the transport is `SpeculosTransport` and the policy is less strict.
+The flow is the same as for a real Ledger, except the transport is `SpeculosTransport`, the policy is less strict, and transport configuration is exposed through `Debug & Lab`.
 
 ## Recommended Order for Studying the Code
 

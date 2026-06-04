@@ -121,10 +121,12 @@ adb -s emulator-5554 shell am start -n com.ledgerpasswords.companion/com.ledgerp
 
 Then:
 
-1. open `Sync`;
+1. open `Debug`;
 2. choose `Speculos`;
 3. keep `10.0.2.2` and `10100` if you use the default configuration;
-4. test `Import`, `Compare`, `Export`, `Verify`.
+4. use `Refresh target` if you want to confirm connectivity first;
+5. open `Sync`;
+6. run `Synchronize local and target` and follow the guided read/write/verify dialogs.
 
 ## Manual Test on a Real Ledger
 
@@ -132,16 +134,17 @@ Real hardware should be treated as a smoke test, not as a stress bench.
 
 Recommended order:
 
-1. `Compare`
-2. `Import from Ledger`
-3. `Verify`
-4. only then `Export to Ledger` if the diff is understood
+1. export a `backup.json` first if you care about the current local vault;
+2. connect the Ledger, open `Passwords`, and grant USB permission if requested;
+3. open `Sync` and tap `Synchronize local and target`;
+4. approve the initial read, resolve conflicts if any, then approve the write and verification read;
+5. return home and confirm that `Last sync` was updated and pending local changes disappeared.
 
 Reminders:
 
 - the `Passwords` app must be open on the Ledger;
-- real `push` requires confirmation;
-- the companion does not perform automatic readback after writing;
+- real writes require confirmation on the device;
+- the guided `Synchronize` flow performs its own verification readback;
 - `Debug` contains the dangerous override and must not be confused with the normal flow.
 
 ## Where to Look When It Breaks

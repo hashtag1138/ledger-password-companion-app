@@ -11,6 +11,7 @@ This repository already has a dedicated TCP transport on the protocol side, and 
 - `loadMetadatas` writes;
 - confirmation prompts from the Passwords app;
 - CLI `pull`, `push`, `verify`, and `diff` checks.
+- the Android guided `Synchronize` flow over TCP.
 
 ## What Speculos Does Not Replace
 
@@ -112,7 +113,7 @@ This does two useful things for `app-passwords`:
 
 - approves the first-run disclaimer;
 - chooses `QWERTY`;
-- reads the Speculos screen and presses `both` when `Transfer metadatas ?` or `Overwrite metadatas ?` appears.
+- reads the Speculos screen and auto-answers common prompts used during read/write tests.
 
 To also replay the write path on the emulator:
 
@@ -141,7 +142,7 @@ This script:
 
 By default, the auto-approver only watches the current Speculos screen and handles the sequence:
 
-- `Transfer metadatas ?` or `Overwrite metadatas ?`: press `right`;
+- `Refuse`, `Transfer metadatas ?`, or `Overwrite metadatas ?`: press `right`;
 - `Approve`: press `both`.
 
 If you want to keep local app data between two runs:
@@ -153,10 +154,12 @@ scripts/android-emulator-speculos-test.sh --keep-app-data
 For a manual test on the emulator:
 
 1. install the APK;
-2. open the sync screen;
+2. open `Debug`;
 3. choose `Speculos`;
 4. keep `10.0.2.2` and `10100`;
-5. use `Refresh`, then `Import`, `Compare`, `Export`, `Verify`.
+5. use `Refresh target` if you want to confirm connectivity first;
+6. open `Sync`;
+7. use `Synchronize local and target` and follow the guided read/write/verify dialogs.
 
 ## Direct CLI Commands
 

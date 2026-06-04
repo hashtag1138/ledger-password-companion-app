@@ -2,9 +2,19 @@
 
 Date: `2026-06-03`
 
-## Problem
+## Status
 
-The current sync flow is destructive in both directions:
+As of `2026-06-04`, the guided `Synchronize` flow, the sync shadow, and the core 3-way merge/conflict model are implemented.
+
+What remains is mostly:
+
+- deeper real-device validation;
+- broader end-to-end convergence coverage after retries and stale shadow recovery;
+- product polish around complex conflict cases.
+
+## Original Problem
+
+The original sync flow was destructive in both directions:
 
 - importing from the Ledger replaces the local vault;
 - exporting to the Ledger replaces the full metadata block on the device.
@@ -23,7 +33,7 @@ We need a user-facing `Synchronize` flow that:
 
 - avoid silent data loss on either side;
 - make `Synchronize` the primary sync action;
-- keep `Import`, `Compare`, `Export`, and `Verify` available as advanced/manual tools;
+- keep low-level sync primitives reusable in code, tests, and CLI without exposing them in the normal daily UI;
 - introduce a safe merge model in Phase 1, then a true bidirectional sync model in Phase 2.
 
 ## Non-Goals
@@ -60,7 +70,7 @@ Introduce a non-destructive `Synchronize` button that merges obvious additions f
 - [x] model merge conflicts explicitly
 - [x] render a merge summary in the sync UI
 - [x] add a primary `Synchronize` action in the sync screen
-- [x] keep manual `Import`, `Compare`, `Export`, `Verify` as advanced actions
+- [x] preserve low-level sync primitives even though the main UI only exposes `Synchronize`
 - [x] execute `read -> merge -> push -> verify -> persist local`
 - [x] block on conflicts before any write
 - [x] reuse existing push safety policy on the merged vault
@@ -75,7 +85,7 @@ Introduce a non-destructive `Synchronize` button that merges obvious additions f
 - no device-only identifier is lost during sync;
 - same-name, different-charset conflicts block the write path;
 - local persistence happens only after successful device verification;
-- manual flows still work.
+- the shared read/merge/write/verify pipeline stays reusable from non-UI code paths.
 
 ## Daily-Use UX Streamlining
 
@@ -126,12 +136,12 @@ Then compute a 3-way merge:
 
 - [x] add a dedicated local sync state store
 - [x] define a 3-way merge planner
-- [ ] propagate deletions correctly
-- [ ] detect modify-vs-delete conflicts
-- [ ] detect modify-vs-modify conflicts
-- [ ] add a conflict resolution UI
+- [x] propagate deletions correctly
+- [x] detect modify-vs-delete conflicts
+- [x] detect modify-vs-modify conflicts
+- [x] add a conflict resolution UI
 - [x] update the sync shadow only after a successful end-to-end sync
-- [ ] add tests for add/update/delete convergence
+- [x] add tests for add/update/delete convergence at the planner level
 
 ### Acceptance Criteria
 

@@ -16,9 +16,9 @@ Reminders:
 - metadata block limited by the `storage_size` exposed by the Passwords app;
 - the Ledger does not provide unit add/delete APDUs: every write replaces the whole metadata block.
 
-## Safety Policy Before a Real Push
+## Safety Policy Before Writing to a Real Ledger
 
-Before a `push` to a real Ledger, the companion applies a stricter policy than the raw protocol.
+Before a real Ledger write, the companion applies a stricter policy than the raw protocol.
 
 Blocking examples:
 
@@ -47,12 +47,12 @@ It should only be used to:
 
 ## Practical Precaution
 
-Before a real `push`:
+Before a real synchronization write:
 
-1. export a `backup.json`;
-2. re-read the diff;
-3. confirm the write popup;
-4. explicitly verify the result afterward.
+1. export a `backup.json` if the current local vault matters;
+2. review local changes and resolve any reported conflicts deliberately;
+3. approve the read, write, and verification prompts on the Ledger only when they match the action you started;
+4. wait for the success dialog before assuming local and device state converged.
 
 ## Current Limits
 
@@ -61,5 +61,7 @@ The companion reduces risk, but it cannot fix internal `app-passwords` bugs.
 Fuzzing campaigns have already shown that some valid or semi-valid states can crash the Ledger app itself. For that reason:
 
 - Speculos should be used as a proving ground before any risky test;
-- real `push` should remain deliberate and explicit;
+- real writes should remain deliberate and explicit;
 - debug flows remain separate from the normal flow.
+
+The sync shadow is also local to the current phone install. It helps the app distinguish pending local changes from synchronized state, but it is not a replacement for a user-managed backup.

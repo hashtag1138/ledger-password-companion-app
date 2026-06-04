@@ -11,8 +11,8 @@ This section is intended for normal companion usage, especially the Android app.
 
 - manage the list of Ledger Passwords identifiers/nicknames locally;
 - import and export a compatible `backup.json`;
-- compare local state and Ledger state;
-- push a metadata block to the Ledger after explicit confirmation.
+- synchronize local state and Ledger state through a guided merge flow;
+- remember the last successful sync to surface pending local changes.
 
 ## What the Companion Does Not Do
 
@@ -25,12 +25,19 @@ This section is intended for normal companion usage, especially the Android app.
 
 1. Prepare or edit identifiers locally in the app.
 2. Export a `backup.json` if you want a file copy.
-3. Connect the Ledger, open the `Passwords` app, then use `Compare`.
-4. If the diff is correct, use `Export to Ledger`.
-5. Run `Verify` separately after writing.
+3. Connect the Ledger, open the `Passwords` app, then open `Sync`.
+4. Tap `Synchronize` and approve the read, write, and verification steps on the device.
+5. If a conflict is reported, choose whether to keep the local or Ledger version for that identifier.
+6. Wait for the success dialog, then return home and confirm that pending local changes disappeared.
 
 ## About Debug
 
 The `Debug` menu exists for testing and technical investigation. A normal user does not need it day to day.
+
+It contains:
+
+- transport selection for real USB or Speculos;
+- target diagnostics such as `Refresh target`;
+- the dangerous hardware override used only for supervised testing.
 
 If you want to understand the architecture, reproduce tests, or use Speculos, go to the [developer documentation](../developer/README.md).
