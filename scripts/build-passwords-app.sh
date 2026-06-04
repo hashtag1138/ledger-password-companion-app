@@ -9,7 +9,8 @@ IMAGE="${LEDGER_APP_DEV_TOOLS_IMAGE:-ghcr.io/ledgerhq/ledger-app-builder/ledger-
 UPDATE_REPO=1
 PRINT_PATH_ONLY=0
 ENABLE_POPULATE=1
-MAKE_FLAGS=("TESTING=1")
+ENABLE_TESTING=1
+MAKE_FLAGS=()
 
 usage() {
     cat <<'EOF'
@@ -22,6 +23,7 @@ Options:
   --repo URL         app-passwords Git repository URL.
   --image IMAGE      Docker image used for the build.
   --no-update        Reuse the existing checkout as-is.
+  --no-testing       Build without TESTING=1, so HID keyboard output stays enabled.
   --no-populate      Build without the demo passwords preloaded in NVRAM.
   --print-path       Print the resulting app.elf path only.
   --help             Show this help.
@@ -29,6 +31,7 @@ Options:
 Notes:
   - The build runs inside Ledger's official `ledger-app-dev-tools` Docker image.
   - By default the resulting Speculos-ready ELF is built with `TESTING=1 POPULATE=1`.
+  - `--no-testing` keeps the production HID typing path enabled.
 EOF
 }
 
@@ -52,6 +55,10 @@ while (($# > 0)); do
             ;;
         --no-update)
             UPDATE_REPO=0
+            shift
+            ;;
+        --no-testing)
+            ENABLE_TESTING=0
             shift
             ;;
         --no-populate)
@@ -91,6 +98,10 @@ elif ((UPDATE_REPO)); then
     git -C "$WORK_DIR" checkout --force FETCH_HEAD
 fi
 
+if ((ENABLE_TESTING)); then
+    MAKE_FLAGS+=("TESTING=1")
+fi
+
 if ((ENABLE_POPULATE)); then
     MAKE_FLAGS+=("POPULATE=1")
 fi
@@ -111,6 +122,10 @@ fi
 if ((PRINT_PATH_ONLY)); then
     printf '%s\n' "$APP_ELF"
 else
-    echo "Built app-passwords test ELF:"
+    if ((ENABLE_TESTING)); then
+        echo "Built app-passwords test ELF:"
+    else
+        echo "Built app-passwords non-testing ELF:"
+    fi
     echo "$APP_ELF"
 fi
