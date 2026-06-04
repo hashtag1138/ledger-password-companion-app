@@ -1,5 +1,7 @@
 # Ledger Passwords Companion
 
+![Ledger Passwords Companion home screen](docs/assets/home-screen-v0.2.0.jpg)
+
 ## Disclaimer
 
 This companion targets the original Ledger Passwords app from [`LedgerHQ/app-passwords`](https://github.com/LedgerHQ/app-passwords), but real-device testing uncovered known app-side bugs in upstream `1.3.1`, including:
