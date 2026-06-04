@@ -60,6 +60,9 @@ import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.model.hasSameLedgerEntries
+import com.ledgerpasswords.companion.core.model.overlayLocalMetadataFrom
+import com.ledgerpasswords.companion.core.model.toLedgerComparable
 import com.ledgerpasswords.companion.core.risk.LedgerPushRiskAssessment
 import com.ledgerpasswords.companion.core.risk.LedgerPushRiskPolicy
 import com.ledgerpasswords.companion.core.risk.PushRiskDecision
@@ -110,6 +113,7 @@ class MainActivity : ComponentActivity() {
     private val exportBackupLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri == null) {
+                pendingExportBackupFileName = null
                 localVaultMessage = "Export backup.json cancelled."
             } else {
                 exportBackupToUri(uri)
@@ -119,6 +123,7 @@ class MainActivity : ComponentActivity() {
     private var localVault by mutableStateOf(Vault(source = VaultSource.Local))
     private var localVaultMessage by mutableStateOf("Loading local storage...")
     private var localBackupJsonText by mutableStateOf<String?>(null)
+    private var pendingExportBackupFileName: String? = null
     private var showSyncScreen by mutableStateOf(false)
     private var showSettingsScreen by mutableStateOf(false)
     private var showAboutScreen by mutableStateOf(false)
@@ -230,6 +235,11 @@ class MainActivity : ComponentActivity() {
                 onEditorNicknameChanged = { nickname ->
                     updateEntryEditor {
                         coerceNicknameDraft(nickname)
+                    }
+                },
+                onEditorInfoChanged = { info ->
+                    updateEntryEditor {
+                        copy(info = info, errorMessage = null)
                     }
                 },
                 onEditorCharsetToggled = { flag, checked ->
@@ -428,7 +438,7 @@ class MainActivity : ComponentActivity() {
     ): LedgerPushRiskAssessment {
         val (inspection, findings) = inspectLocalBackupOrFindings()
         val normalizedVault = vault.copy(source = VaultSource.Local).sortedByNickname()
-        if (inspection != null && inspection.preferredVault.entries != normalizedVault.entries) {
+        if (inspection != null && !inspection.preferredVault.hasSameLedgerEntries(normalizedVault)) {
             val severity = if (mode == PushSafetyMode.HardwareSafe) PushRiskSeverity.Block else PushRiskSeverity.Warning
             findings += PushRiskFinding(
                 severity = severity,
@@ -466,7 +476,7 @@ class MainActivity : ComponentActivity() {
         storageSize: Int,
     ): SyncShadowState =
         SyncShadowState(
-            lastSyncedVault = vault.copy(source = VaultSource.Local).sortedByNickname(),
+            lastSyncedVault = vault.copy(source = VaultSource.Local).sortedByNickname().toLedgerComparable(),
             targetKind = syncTargetKind(target),
             targetDescriptor = syncTargetDescriptor(target),
             storageSize = storageSize,
@@ -679,8 +689,18 @@ class MainActivity : ComponentActivity() {
             updateEntryEditor { copy(errorMessage = "Select at least one charset.") }
             return
         }
+        if (draft.info.length > MAX_LOCAL_ENTRY_INFO_CHARACTERS) {
+            updateEntryEditor {
+                copy(errorMessage = "Info exceeds $MAX_LOCAL_ENTRY_INFO_CHARACTERS characters.")
+            }
+            return
+        }
 
-        val entry = PasswordIdentifier(nickname = nickname, charsets = draft.selectedFlags.toCharsetPolicy())
+        val entry = PasswordIdentifier(
+            nickname = nickname,
+            charsets = draft.selectedFlags.toCharsetPolicy(),
+            localNote = draft.info.takeUnless { it.isBlank() },
+        )
         val nextVaultResult =
             runCatching {
                 if (draft.originalNickname == null) {
@@ -746,7 +766,9 @@ class MainActivity : ComponentActivity() {
         showSettingsScreen = false
         showAboutScreen = false
         showDebugScreen = false
-        exportBackupLauncher.launch(DEFAULT_BACKUP_FILE_NAME)
+        val suggestedFileName = BackupFileNames.defaultBackupFileName()
+        pendingExportBackupFileName = suggestedFileName
+        exportBackupLauncher.launch(suggestedFileName)
     }
 
     private fun importBackupFromUri(uri: Uri) {
@@ -786,11 +808,13 @@ class MainActivity : ComponentActivity() {
     private fun exportBackupToUri(uri: Uri) {
         val validation = validatorFor().validate(localVault)
         if (!validation.isValid) {
+            pendingExportBackupFileName = null
             localVaultMessage = validation.toUserMessage()
             return
         }
 
-        val fileName = displayNameFor(uri) ?: DEFAULT_BACKUP_FILE_NAME
+        val fallbackFileName = pendingExportBackupFileName ?: BackupFileNames.defaultBackupFileName()
+        val fileName = displayNameFor(uri) ?: fallbackFileName
         runCatching {
             val json = localBackupJsonText ?: backupJsonCodec.toJson(localVault.copy(source = VaultSource.Local))
             val output =
@@ -801,6 +825,7 @@ class MainActivity : ComponentActivity() {
         }.onFailure { error ->
             localVaultMessage = error.message ?: "Unable to export backup.json."
         }
+        pendingExportBackupFileName = null
     }
 
     private fun applyLocalVault(vault: Vault, successMessage: String, backupJsonText: String? = null): LocalPersistenceResult {
@@ -1023,8 +1048,15 @@ class MainActivity : ComponentActivity() {
                 ),
             )
             val decoded = metadataCodec.decode(client.dumpMetadatas(config.storageSize))
-            val backupJsonText = backupJsonCodec.toJson(decoded, app = BackupApp(name = info.name, version = info.version))
-            val importedVault = Vault(entries = decoded.vault.entries, source = VaultSource.Local)
+            val importedVault =
+                Vault(entries = decoded.vault.entries, source = VaultSource.Local)
+                    .overlayLocalMetadataFrom(localSnapshot)
+                    .sortedByNickname()
+            val backupJsonText = backupJsonCodec.toJson(
+                decoded,
+                app = BackupApp(name = info.name, version = info.version),
+                localMetadataSource = importedVault,
+            )
             val requiresConfirmation = localSnapshot.entries.isNotEmpty() && importedVault.entries != localSnapshot.entries
             SyncUpdate(
                 status = SyncStatus.Success,
@@ -1196,7 +1228,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                mergedVault = requireNotNull(plan.mergedVault)
+                mergedVault = requireNotNull(plan.mergedVault).overlayLocalMetadataFrom(localSnapshot).sortedByNickname()
             } else {
                 val plan = mergePlanner.plan(localSnapshot, deviceVault)
                 summary = renderSynchronizationSummary(plan)
@@ -1231,7 +1263,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                mergedVault = requireNotNull(plan.mergedVault)
+                mergedVault = requireNotNull(plan.mergedVault).overlayLocalMetadataFrom(localSnapshot).sortedByNickname()
             }
 
             val assessment = assessMergedPushRisk(mergedVault, config.storageSize, target.pushSafetyMode())
@@ -1330,7 +1362,7 @@ class MainActivity : ComponentActivity() {
             Vault(
                 entries = state.autoMergedEntries + state.chosenEntries,
                 source = VaultSource.Local,
-            ).sortedByNickname()
+            ).overlayLocalMetadataFrom(localVault).sortedByNickname()
         val assessment = assessMergedPushRisk(mergedVault, state.storageSize, target.pushSafetyMode())
         if (assessment.decision == PushRiskDecision.Block && target is SyncTarget.Usb && !hardwareDangerousOverrideEnabled) {
             syncUiState =
@@ -2018,7 +2050,6 @@ class MainActivity : ComponentActivity() {
         private const val LOCAL_VAULT_FILE_NAME = "local-vault.json"
         private const val SYNC_SHADOW_FILE_NAME = "sync-shadow.properties"
         private const val UI_PREFERENCES_FILE_NAME = "ui-preferences.properties"
-        private const val DEFAULT_BACKUP_FILE_NAME = "ledger-passwords-backup.json"
         private const val EMULATOR_HOST_LOOPBACK = "10.0.2.2"
         private const val DEFAULT_SPECULOS_PORT = 10100
         const val DIAGNOSTIC_LOG_FILE_NAME = DiagnosticLogStore.FILE_NAME
@@ -2173,6 +2204,7 @@ private fun renderConflictResolutionSide(
 internal data class EntryEditorState(
     val originalNickname: String? = null,
     val nickname: String = "",
+    val info: String = "",
     val selectedFlags: Set<CharsetFlag> = CharsetFlag.entries.toSet(),
     val errorMessage: String? = null,
 ) {
@@ -2183,10 +2215,13 @@ internal data class EntryEditorState(
         fun fromEntry(entry: PasswordIdentifier): EntryEditorState = EntryEditorState(
             originalNickname = entry.nickname,
             nickname = entry.nickname,
+            info = entry.localNote.orEmpty(),
             selectedFlags = entry.charsets.toFlags(),
         )
     }
 }
+
+internal const val MAX_LOCAL_ENTRY_INFO_CHARACTERS = 1000
 
 private data class LocalPersistenceResult(
     val persisted: Boolean,
@@ -2225,6 +2260,7 @@ internal object UiTags {
     const val HomeAddEntry = "home_add_entry"
     const val HomeOpenSync = "home_open_sync"
     const val EntryNicknameField = "entry_nickname_field"
+    const val EntryInfoField = "entry_info_field"
     const val EntrySave = "entry_save"
     const val DialogStartupDontShowAgain = "dialog_startup_dont_show_again"
     const val SyncBack = "sync_back"

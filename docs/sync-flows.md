@@ -50,8 +50,9 @@ Import backup.json
 4. Replace local vault after confirmation if needed
 
 Export backup.json
-1. Encode LocalVault through BackupJsonCodec
-2. Write file through Android picker
+1. Suggest a timestamped file name in the Android picker
+2. Encode LocalVault through BackupJsonCodec
+3. Write file through Android picker
 ```
 
 ## Merge Rules

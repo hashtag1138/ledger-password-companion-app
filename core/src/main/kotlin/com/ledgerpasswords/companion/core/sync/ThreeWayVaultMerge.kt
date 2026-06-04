@@ -3,6 +3,7 @@ package com.ledgerpasswords.companion.core.sync
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.model.sameLedgerRepresentation
 
 enum class ThreeWayConflictReason {
     AddedDifferently,
@@ -200,5 +201,5 @@ private fun sameLedgerRepresentation(
     when {
         left == null && right == null -> true
         left == null || right == null -> false
-        else -> left.nickname == right.nickname && left.charsets == right.charsets
+        else -> left.sameLedgerRepresentation(right)
     }

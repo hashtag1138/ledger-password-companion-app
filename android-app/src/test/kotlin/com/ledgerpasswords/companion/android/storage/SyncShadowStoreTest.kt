@@ -29,7 +29,10 @@ class SyncShadowStoreTest {
             store.save(
                 SyncShadowState(
                     lastSyncedVault = Vault(
-                        entries = listOf(PasswordIdentifier("zeta"), PasswordIdentifier("alpha")),
+                        entries = listOf(
+                            PasswordIdentifier("zeta", localNote = "Personal"),
+                            PasswordIdentifier("alpha", localNote = "Work"),
+                        ),
                         source = VaultSource.LedgerDevice,
                     ),
                     targetKind = SyncTargetKind.Speculos,
@@ -44,6 +47,7 @@ class SyncShadowStoreTest {
         assertEquals(saved, loaded)
         assertEquals(listOf("alpha", "zeta"), loaded?.lastSyncedVault?.entries?.map { it.nickname })
         assertEquals(VaultSource.Local, loaded?.lastSyncedVault?.source)
+        assertEquals(listOf(null, null), loaded?.lastSyncedVault?.entries?.map { it.localNote })
     }
 
     @Test

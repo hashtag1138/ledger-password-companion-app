@@ -135,6 +135,7 @@ internal fun LedgerPasswordsCompanionShell(
     onOpenDebug: () -> Unit,
     onBackToHome: () -> Unit,
     onEditorNicknameChanged: (String) -> Unit,
+    onEditorInfoChanged: (String) -> Unit,
     onEditorCharsetToggled: (CharsetFlag, Boolean) -> Unit,
     onHardwarePushConfirmationChanged: (Boolean) -> Unit,
     onHardwareDangerousOverrideChanged: (Boolean) -> Unit,
@@ -421,6 +422,7 @@ internal fun LedgerPasswordsCompanionShell(
                             localVault = localVault,
                             storageSize = storageSize,
                             onNicknameChange = onEditorNicknameChanged,
+                            onInfoChange = onEditorInfoChanged,
                             onCharsetToggled = onEditorCharsetToggled,
                             onSave = onSaveEntry,
                             onDelete = onDeleteEntry,
@@ -683,6 +685,7 @@ private fun EntryWorkbenchScreen(
     localVault: Vault,
     storageSize: Int,
     onNicknameChange: (String) -> Unit,
+    onInfoChange: (String) -> Unit,
     onCharsetToggled: (CharsetFlag, Boolean) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
@@ -692,10 +695,12 @@ private fun EntryWorkbenchScreen(
     val previewCapacity = draftVault?.capacitySnapshot(storageSize)
     val previewValidation = draftVault?.let { VaultValidator(storageSize).validate(it) }
     val nicknameTooLong = state.nicknameByteCount > LedgerPasswordsLimits.MAX_NICKNAME_BYTES
+    val infoTooLong = state.info.length > MAX_LOCAL_ENTRY_INFO_CHARACTERS
     val canSave =
         state.nickname.trim().isNotBlank() &&
             state.selectedFlags.isNotEmpty() &&
             !nicknameTooLong &&
+            !infoTooLong &&
             (previewValidation?.isValid ?: false)
 
     Column(
@@ -708,10 +713,11 @@ private fun EntryWorkbenchScreen(
     ) {
         HeroCard(
             title = if (state.isCreation) "New identifier" else "Edit identifier",
-            subtitle = "Nickname length is limited by Ledger. Any change can alter the generated password.",
+            subtitle = "Nickname length is limited by Ledger. Info stays local to the app and exported backup.",
         ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatPill("${state.nicknameByteCount}/${LedgerPasswordsLimits.MAX_NICKNAME_BYTES} UTF-8 bytes")
+                StatPill("${state.info.length}/$MAX_LOCAL_ENTRY_INFO_CHARACTERS info chars")
                 previewCapacity?.let {
                     StatPill("${it.usedBytes}/${it.storageSize} bytes after save")
                 }
@@ -738,6 +744,27 @@ private fun EntryWorkbenchScreen(
                             nicknameTooLong -> "Too long for Ledger. Shorten the nickname."
                             state.nickname.trim().isBlank() -> "Nickname must not be blank."
                             else -> "Counted in UTF-8 bytes, not just characters."
+                        },
+                    )
+                },
+            )
+        }
+
+        SectionCard(title = "Info", subtitle = "Local-only text, exported in backup.json, never sent to the Ledger") {
+            OutlinedTextField(
+                value = state.info,
+                onValueChange = onInfoChange,
+                modifier = Modifier.fillMaxWidth().testTag(UiTags.EntryInfoField),
+                label = { Text("Info") },
+                minLines = 3,
+                maxLines = 6,
+                isError = infoTooLong,
+                supportingText = {
+                    Text(
+                        when {
+                            infoTooLong -> "Too long. Keep it under $MAX_LOCAL_ENTRY_INFO_CHARACTERS characters."
+                            state.info.isBlank() -> "Optional. Leave empty if you do not need local notes."
+                            else -> "Stored in clear text on the phone and in exported backup.json files."
                         },
                     )
                 },
@@ -1260,17 +1287,33 @@ private fun CompactEntryRow(
                 }
             },
             supportingContent = {
-                Text(
-                    entry.charsets.toLedgerNames().joinToString(" • "),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color =
-                        if (isNewSinceLastSync) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                )
+                Column {
+                    Text(
+                        entry.charsets.toLedgerNames().joinToString(" • "),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color =
+                            if (isNewSinceLastSync) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                    )
+                    entry.localNote?.let { info ->
+                        Text(
+                            info,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color =
+                                if (isNewSinceLastSync) {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             },
             trailingContent = {
                 IconButton(onClick = onCopy) {
@@ -1349,7 +1392,11 @@ private fun buildDraftVault(localVault: Vault, state: EntryEditorState): Vault? 
     val nickname = state.nickname.trim()
     if (nickname.isBlank() || state.selectedFlags.isEmpty()) return null
 
-    val updatedEntry = PasswordIdentifier(nickname = nickname, charsets = state.selectedFlags.toCharsetPolicy())
+    val updatedEntry = PasswordIdentifier(
+        nickname = nickname,
+        charsets = state.selectedFlags.toCharsetPolicy(),
+        localNote = state.info.takeUnless { it.isBlank() },
+    )
     val nextEntries =
         if (state.originalNickname == null) {
             localVault.entries + updatedEntry

@@ -78,6 +78,42 @@ class LocalVaultStoreTest {
     }
 
     @Test
+    fun `load preserves local metadata while preferring raw ledger content`() {
+        val file = tempDir.resolve("local-vault.json").toFile()
+        val raw = MetadataCodec().encode(Vault(entries = listOf(PasswordIdentifier("from-raw"))))
+        val text =
+            """
+            {
+              "format": "ledger-passwords-companion.v1",
+              "storage_size": 4096,
+              "parsed": [
+                {
+                  "nickname": "from-parsed",
+                  "charsets": ["ALL_SETS"]
+                }
+              ],
+              "raw_metadatas": "${Hex.encode(raw)}",
+              "local_metadata": {
+                "entries": [
+                  {
+                    "nickname": "from-raw",
+                    "info": "Keep me local"
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        file.writeText(text)
+        val store = LocalVaultStore(file)
+
+        val result = store.load()
+
+        assertEquals(listOf("from-raw"), result.vault?.entries?.map { it.nickname })
+        assertEquals("Keep me local", result.vault?.entries?.single()?.localNote)
+        assertEquals(text, result.backupJsonText)
+    }
+
+    @Test
     fun `load invalid json preserves corrupt copy and resets to empty local vault`() {
         val file = tempDir.resolve("local-vault.json").toFile()
         file.writeText("{ this is not valid json")

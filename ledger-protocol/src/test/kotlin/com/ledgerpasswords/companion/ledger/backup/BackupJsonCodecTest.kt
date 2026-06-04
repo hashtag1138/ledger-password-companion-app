@@ -106,6 +106,26 @@ class BackupJsonCodecTest {
     }
 
     @Test
+    fun `toJson exports local metadata separately from ledger entries`() {
+        val output =
+            codec.toJson(
+                Vault(
+                    entries = listOf(
+                        PasswordIdentifier("github", localNote = "Personal"),
+                        PasswordIdentifier("gmail"),
+                    ),
+                ),
+            )
+        val file = json.decodeFromString<BackupFile>(output)
+
+        assertEquals(1, file.localMetadata?.entries?.size)
+        assertEquals("github", file.localMetadata?.entries?.single()?.nickname)
+        assertEquals("Personal", file.localMetadata?.entries?.single()?.info)
+        assertEquals(listOf("github", "gmail"), codec.fromJson(output).entries.map { it.nickname })
+        assertEquals("Personal", codec.fromJson(output).entries.first { it.nickname == "github" }.localNote)
+    }
+
+    @Test
     fun `inspect flags parsed raw mismatch`() {
         val embeddedRaw = MetadataCodec().encode(Vault(entries = listOf(PasswordIdentifier("from-raw"))))
         val text =
@@ -148,5 +168,37 @@ class BackupJsonCodecTest {
 
         assertTrue(inspection.findings.any { it.code == "parsed_raw_mismatch" })
         assertTrue(inspection.findings.any { it.code == "raw_not_roundtrip_stable" })
+    }
+
+    @Test
+    fun `preferred vault from json keeps local metadata while raw stays authoritative`() {
+        val embeddedRaw = MetadataCodec().encode(Vault(entries = listOf(PasswordIdentifier("from-raw"))))
+        val text =
+            """
+            {
+              "format": "ledger-passwords-companion.v1",
+              "storage_size": 4096,
+              "parsed": [
+                {
+                  "nickname": "from-parsed",
+                  "charsets": ["ALL_SETS"]
+                }
+              ],
+              "raw_metadatas": "${Hex.encode(embeddedRaw)}",
+              "local_metadata": {
+                "entries": [
+                  {
+                    "nickname": "from-raw",
+                    "info": "Keep me local"
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+
+        val vault = codec.preferredVaultFromJson(text)
+
+        assertEquals(listOf("from-raw"), vault.entries.map { it.nickname })
+        assertEquals("Keep me local", vault.entries.single().localNote)
     }
 }

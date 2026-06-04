@@ -3,6 +3,7 @@ package com.ledgerpasswords.companion.core.sync
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.model.sameLedgerRepresentation
 
 data class VaultMergeConflict(
     val nickname: String,
@@ -34,7 +35,7 @@ class VaultMergePlanner {
 
         local.entries.forEach { localEntry ->
             val remoteEntry = remoteByNickname[localEntry.nickname] ?: return@forEach
-            if (localEntry.charsets == remoteEntry.charsets) {
+            if (localEntry.sameLedgerRepresentation(remoteEntry)) {
                 identical += localEntry
             } else {
                 conflicts +=

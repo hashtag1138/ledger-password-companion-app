@@ -4,14 +4,12 @@ import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
 import com.ledgerpasswords.companion.ledger.backup.BackupApp
 import com.ledgerpasswords.companion.ledger.backup.BackupJsonCodec
-import com.ledgerpasswords.companion.ledger.metadata.MetadataCodec
 import java.io.File
 import java.io.IOException
 
 class LocalVaultStore(
     private val file: File,
     private val codec: BackupJsonCodec = BackupJsonCodec(),
-    private val metadataCodec: MetadataCodec = MetadataCodec(),
 ) {
     fun load(): LocalVaultLoadResult {
         if (!file.exists()) {
@@ -64,8 +62,7 @@ class LocalVaultStore(
     }
 
     private fun decodeVault(text: String): Vault {
-        val raw = codec.rawFromJson(text)
-        return metadataCodec.decode(raw).vault.copy(source = VaultSource.Local).sortedByNickname()
+        return codec.preferredVaultFromJson(text).copy(source = VaultSource.Local).sortedByNickname()
     }
 
     private fun writeTextAtomically(json: String) {

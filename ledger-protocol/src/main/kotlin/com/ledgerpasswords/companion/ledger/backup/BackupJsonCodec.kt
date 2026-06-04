@@ -5,6 +5,10 @@ import com.ledgerpasswords.companion.core.model.CharsetPolicy
 import com.ledgerpasswords.companion.core.model.PasswordIdentifier
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.model.hasSameLedgerEntries
+import com.ledgerpasswords.companion.core.model.normalizedLocalMetadata
+import com.ledgerpasswords.companion.core.model.overlayLocalMetadataFrom
+import com.ledgerpasswords.companion.core.model.toLedgerComparable
 import com.ledgerpasswords.companion.core.risk.PushRiskFinding
 import com.ledgerpasswords.companion.core.risk.PushRiskSeverity
 import com.ledgerpasswords.companion.ledger.metadata.DecodedMetadata
@@ -28,15 +32,29 @@ class BackupJsonCodec(
         val file = json.decodeFromString(BackupFile.serializer(), text)
         val entries = file.parsed.map { it.toDomain() }
         return Vault(entries = entries, source = VaultSource.BackupFile)
+            .overlayLocalMetadata(file.localMetadata)
+    }
+
+    fun preferredVaultFromJson(text: String): Vault {
+        val inspection = inspect(text)
+        return when {
+            inspection.rawVault != null -> inspection.rawVault
+            inspection.hasRawMetadatas -> error("The raw_metadatas field cannot be decoded into a valid vault.")
+            else -> inspection.parsedVault
+        }
     }
 
     fun toJson(vault: Vault, app: BackupApp = BackupApp(name = "Passwords", version = "unknown")): String {
-        val raw = metadataCodec.encode(vault)
+        val raw = metadataCodec.encode(vault.toLedgerComparable())
         val decoded = metadataCodec.decode(raw)
-        return toJson(decoded, app)
+        return toJson(decoded, app, localMetadataSource = vault)
     }
 
-    fun toJson(decoded: DecodedMetadata, app: BackupApp = BackupApp(name = "Passwords", version = "unknown")): String {
+    fun toJson(
+        decoded: DecodedMetadata,
+        app: BackupApp = BackupApp(name = "Passwords", version = "unknown"),
+        localMetadataSource: Vault? = null,
+    ): String {
         val file = BackupFile(
             format = FORMAT,
             storageSize = LedgerPasswordsLimits.DEFAULT_STORAGE_SIZE,
@@ -45,6 +63,7 @@ class BackupJsonCodec(
             erased = decoded.erasedEntries.map { BackupEntry.fromDomain(it) },
             corruptions = decoded.corruptions.map { "offset=${it.offset}: ${it.message}" },
             rawMetadatas = decoded.rawHex,
+            localMetadata = localMetadataSource.toBackupLocalMetadata(),
         )
         return json.encodeToString(BackupFile.serializer(), file)
     }
@@ -54,13 +73,16 @@ class BackupJsonCodec(
         return if (!file.rawMetadatas.isNullOrBlank()) {
             Hex.decode(file.rawMetadatas)
         } else {
-            metadataCodec.encode(fromJson(text))
+            metadataCodec.encode(fromJson(text).toLedgerComparable())
         }
     }
 
     fun inspect(text: String): BackupInspection {
         val file = json.decodeFromString(BackupFile.serializer(), text)
-        val parsedVault = Vault(entries = file.parsed.map { it.toDomain() }, source = VaultSource.BackupFile).sortedByNickname()
+        val parsedVault =
+            Vault(entries = file.parsed.map { it.toDomain() }, source = VaultSource.BackupFile)
+                .overlayLocalMetadata(file.localMetadata)
+                .sortedByNickname()
         val findings = mutableListOf<PushRiskFinding>()
         val raw =
             if (file.rawMetadatas.isNullOrBlank()) {
@@ -112,12 +134,14 @@ class BackupJsonCodec(
                         severity = PushRiskSeverity.Block,
                         code = "decoded_raw_corruptions",
                         message = "The decoded raw metadata contains ${decoded.corruptions.size} corruption(s).",
-                    )
+                        )
                 }
-                decoded.vault.copy(source = VaultSource.BackupFile).sortedByNickname()
+                decoded.vault.copy(source = VaultSource.BackupFile)
+                    .overlayLocalMetadata(file.localMetadata)
+                    .sortedByNickname()
             }
 
-        if (rawVault != null && rawVault.entries != parsedVault.entries) {
+        if (rawVault != null && !rawVault.hasSameLedgerEntries(parsedVault)) {
             findings += PushRiskFinding(
                 severity = PushRiskSeverity.Block,
                 code = "parsed_raw_mismatch",
@@ -127,7 +151,7 @@ class BackupJsonCodec(
 
         if (raw != null && rawVault != null) {
             val reencodedMatches =
-                runCatching { metadataCodec.encode(rawVault).contentEquals(raw) }
+                runCatching { metadataCodec.encode(rawVault.toLedgerComparable()).contentEquals(raw) }
                     .getOrElse { false }
             if (!reencodedMatches) {
                 findings += PushRiskFinding(
@@ -171,6 +195,7 @@ data class BackupFile(
     @SerialName("nicknames_erased_but_still_stored") val erased: List<BackupEntry> = emptyList(),
     @SerialName("corruptions_encountered") val corruptions: List<String> = emptyList(),
     @SerialName("raw_metadatas") val rawMetadatas: String? = null,
+    @SerialName("local_metadata") val localMetadata: BackupLocalMetadata? = null,
 )
 
 @Serializable
@@ -195,4 +220,41 @@ data class BackupEntry(
             charsets = entry.charsets.toLedgerNames(),
         )
     }
+}
+
+@Serializable
+data class BackupLocalMetadata(
+    val entries: List<BackupLocalMetadataEntry> = emptyList(),
+)
+
+@Serializable
+data class BackupLocalMetadataEntry(
+    val nickname: String,
+    val info: String,
+)
+
+private fun Vault.overlayLocalMetadata(localMetadata: BackupLocalMetadata?): Vault {
+    val infoByNickname =
+        localMetadata?.entries
+            ?.associate { entry -> entry.nickname to entry.info }
+            .orEmpty()
+    return copy(
+        entries =
+            entries.map { entry ->
+                entry.copy(localNote = infoByNickname[entry.nickname] ?: entry.localNote)
+                    .normalizedLocalMetadata()
+            },
+    )
+}
+
+private fun Vault?.toBackupLocalMetadata(): BackupLocalMetadata? {
+    val metadataEntries =
+        this?.entries
+            ?.mapNotNull { entry ->
+                entry.localNote
+                    ?.takeUnless { it.isBlank() }
+                    ?.let { info -> BackupLocalMetadataEntry(nickname = entry.nickname, info = info) }
+            }
+            .orEmpty()
+    return metadataEntries.takeIf { it.isNotEmpty() }?.let { BackupLocalMetadata(entries = it) }
 }

@@ -2,6 +2,7 @@ package com.ledgerpasswords.companion.android.storage
 
 import com.ledgerpasswords.companion.core.model.Vault
 import com.ledgerpasswords.companion.core.model.VaultSource
+import com.ledgerpasswords.companion.core.model.toLedgerComparable
 import com.ledgerpasswords.companion.ledger.backup.BackupApp
 import com.ledgerpasswords.companion.ledger.backup.BackupJsonCodec
 import java.io.File
@@ -65,6 +66,7 @@ class SyncShadowStore(
         val vault =
             runCatching {
                 codec.fromJson(vaultJson).copy(source = VaultSource.Local).sortedByNickname()
+                    .toLedgerComparable()
             }.getOrNull() ?: return null
 
         return SyncShadowState(
@@ -77,7 +79,7 @@ class SyncShadowStore(
     }
 
     fun save(state: SyncShadowState): SyncShadowState {
-        val normalizedVault = state.lastSyncedVault.copy(source = VaultSource.Local).sortedByNickname()
+        val normalizedVault = state.lastSyncedVault.copy(source = VaultSource.Local).sortedByNickname().toLedgerComparable()
         val vaultJson = codec.toJson(normalizedVault, app = SHADOW_APP)
         val text =
             buildString {
