@@ -2,6 +2,12 @@
 
 This guide covers normal use of the Android application.
 
+The companion works with the official Ledger Passwords app `1.3.2`, available in `Ledger Live`.
+
+Official app repository:
+
+- https://github.com/LedgerHQ/app-passwords
+
 ## Installation
 
 Build the APK:
@@ -72,7 +78,7 @@ Prerequisites:
 - Ledger connected to the phone through USB OTG;
 - `Passwords` app open on the Ledger;
 - USB permission granted to the Android app;
-- `Passwords >= 1.3.2` to allow a real `push`.
+- the official `Passwords` app version `1.3.2` or newer installed from `Ledger Live` to allow a real `push`.
 
 Recommended workflow:
 

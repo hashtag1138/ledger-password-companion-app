@@ -1,8 +1,7 @@
 package com.ledgerpasswords.companion.core
 
 private val VERSION_PATTERN = Regex("""^\s*(\d+)\.(\d+)\.(\d+)(?:\D.*)?$""")
-private const val PATCHED_APP_REPO_URL = "https://github.com/hashtag1138/ledger-passwords-show-second-repro"
-private const val COMPANION_REPO_URL = "https://github.com/hashtag1138/ledger-password-companion-app"
+private const val OFFICIAL_APP_REPO_URL = "https://github.com/LedgerHQ/app-passwords"
 
 data class SemanticVersion(
     val major: Int,
@@ -36,7 +35,7 @@ object LedgerAppCompatibility {
     }
 
     fun realDeviceReadOnlyNotice(): String =
-        " Read-only only: real writes require Passwords $minSafeRealDeviceVersionLabel+."
+        " Read-only only: real writes require the official Passwords app $minSafeRealDeviceVersionLabel+ from Ledger Live."
 
     fun realDeviceWriteBlockedMessage(appVersion: String): String {
         val versionClause =
@@ -48,16 +47,12 @@ object LedgerAppCompatibility {
         return """
             Real-device write refused: Passwords app $appVersion $versionClause.
 
-            Passwords 1.3.1 and older are blocked because known app-side bugs can break real writes or later device-side usage:
-            - wrong index handling in Passwords list, especially on second-entry show/type flows;
-            - AZERTY AltGr characters such as ], {, }, \, |, ~ and @ can be lost or altered during typing;
-            - the Show password screen can render misleading glyphs for some generated characters.
+            Real-device writes require the official Passwords app $minSafeRealDeviceVersionLabel or newer, available in Ledger Live.
 
             Read-only operations such as pull/dump remain allowed.
 
-            More information:
-            - patched app and bug tracker: $PATCHED_APP_REPO_URL
-            - companion repository: $COMPANION_REPO_URL
+            Official app repository:
+            - $OFFICIAL_APP_REPO_URL
         """.trimIndent()
     }
 }

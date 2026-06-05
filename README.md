@@ -4,19 +4,11 @@
 
 ## Disclaimer
 
-This companion targets the original Ledger Passwords app from [`LedgerHQ/app-passwords`](https://github.com/LedgerHQ/app-passwords), but real-device testing uncovered known app-side bugs in upstream `1.3.1`, including:
+This companion is compatible with the official Ledger Passwords app `1.3.2`, available in `Ledger Live`.
 
-- wrong index handling in `Passwords list` on some second-entry flows;
-- broken `AZERTY` typing for characters that require `AltGr`;
-- misleading glyph rendering in `Show password` for some generated characters.
-
-The upstream app repository is:
+The official app repository is:
 
 - https://github.com/LedgerHQ/app-passwords
-
-The patched builds, bug analysis, and patch files maintained for those issues are here:
-
-- https://github.com/hashtag1138/ledger-passwords-show-second-repro
 
 Repository scaffold for an Android companion app for the Ledger password manager [`LedgerHQ/app-passwords`](https://github.com/LedgerHQ/app-passwords).
 

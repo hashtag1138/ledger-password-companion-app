@@ -2,6 +2,12 @@
 
 This section is intended for normal companion usage, especially the Android app.
 
+The companion works with the official Ledger Passwords app `1.3.2`, available in `Ledger Live`.
+
+Official app repository:
+
+- https://github.com/LedgerHQ/app-passwords
+
 ## Start Here
 
 - [Use the Android app](./android-app.md)

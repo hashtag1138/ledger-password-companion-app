@@ -150,7 +150,7 @@ class LedgerPwCliTest {
     }
 
     @Test
-    fun `device push over hid is blocked for passwords 1 3 1 and explains why`() {
+    fun `device push over hid is blocked for passwords 1 3 1 and explains official compatibility`() {
         val workdir = Files.createTempDirectory("ledger-pw-cli-test")
         val input = workdir.resolve("backup.json")
         input.writeText(codec.toJson(Vault(entries = listOf(PasswordIdentifier("github")))))
@@ -164,10 +164,9 @@ class LedgerPwCliTest {
         assertTrue(error.message!!.contains("Real-device write refused"))
         assertTrue(error.message!!.contains("1.3.1"))
         assertTrue(error.message!!.contains("1.3.2"))
-        assertTrue(error.message!!.contains("wrong index handling"))
-        assertTrue(error.message!!.contains("AZERTY AltGr"))
+        assertTrue(error.message!!.contains("available in Ledger Live"))
         assertTrue(error.message!!.contains("pull/dump remain allowed"))
-        assertTrue(error.message!!.contains("https://github.com/hashtag1138/ledger-passwords-show-second-repro"))
+        assertTrue(error.message!!.contains("https://github.com/LedgerHQ/app-passwords"))
     }
 
     @Test

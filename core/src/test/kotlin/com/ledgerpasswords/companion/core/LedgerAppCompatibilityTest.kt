@@ -28,15 +28,13 @@ class LedgerAppCompatibilityTest {
     }
 
     @Test
-    fun `realDeviceWriteBlockedMessage explains bugs and links`() {
+    fun `realDeviceWriteBlockedMessage explains official compatibility and link`() {
         val message = LedgerAppCompatibility.realDeviceWriteBlockedMessage("1.3.1")
 
         assertTrue(message.contains("1.3.1"))
         assertTrue(message.contains("1.3.2"))
-        assertTrue(message.contains("wrong index handling"))
-        assertTrue(message.contains("AZERTY AltGr"))
+        assertTrue(message.contains("available in Ledger Live"))
         assertTrue(message.contains("pull/dump remain allowed"))
-        assertTrue(message.contains("https://github.com/hashtag1138/ledger-passwords-show-second-repro"))
-        assertTrue(message.contains("https://github.com/hashtag1138/ledger-password-companion-app"))
+        assertTrue(message.contains("https://github.com/LedgerHQ/app-passwords"))
     }
 }
